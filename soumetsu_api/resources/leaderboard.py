@@ -57,8 +57,10 @@ class LeaderboardRepository:
         while score_req <= total_score:
             level += 1
             if level <= 100:
-                score_req += 5000 // 3 * (4 * (level ** 3) - 3 * (level ** 2) - level) + \
-                            1250 * (1.8 ** (level - 60)) // 3
+                score_req += (
+                    5000 // 3 * (4 * (level**3) - 3 * (level**2) - level)
+                    + 1250 * (1.8 ** (level - 60)) // 3
+                )
             else:
                 score_req += 26931190829 + 100000000000 * (level - 100)
 
@@ -70,8 +72,10 @@ class LeaderboardRepository:
             prev_req = 0
             for l in range(2, level):
                 if l <= 100:
-                    prev_req += 5000 // 3 * (4 * (l ** 3) - 3 * (l ** 2) - l) + \
-                               1250 * (1.8 ** (l - 60)) // 3
+                    prev_req += (
+                        5000 // 3 * (4 * (l**3) - 3 * (l**2) - l)
+                        + 1250 * (1.8 ** (l - 60)) // 3
+                    )
                 else:
                     prev_req += 26931190829 + 100000000000 * (l - 100)
 

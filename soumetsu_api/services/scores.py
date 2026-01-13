@@ -154,7 +154,13 @@ async def get_player_best(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.list_player_best(player_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_best(
+        player_id,
+        mode,
+        playstyle,
+        limit,
+        offset,
+    )
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 
@@ -178,7 +184,13 @@ async def get_player_recent(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.list_player_recent(player_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_recent(
+        player_id,
+        mode,
+        playstyle,
+        limit,
+        offset,
+    )
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 
@@ -202,7 +214,13 @@ async def get_player_firsts(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.list_player_firsts(player_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_firsts(
+        player_id,
+        mode,
+        playstyle,
+        limit,
+        offset,
+    )
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 
@@ -226,7 +244,13 @@ async def get_player_pinned(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.list_player_pinned(player_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_pinned(
+        player_id,
+        mode,
+        playstyle,
+        limit,
+        offset,
+    )
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 

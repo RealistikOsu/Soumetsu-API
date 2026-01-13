@@ -347,7 +347,11 @@ async def get_scores(
         return Response(content="[]", media_type="application/json")
 
     scores = await ctx.scores.list_beatmap_scores(
-        beatmap.beatmap_md5, mode, 0, limit, 0
+        beatmap.beatmap_md5,
+        mode,
+        0,
+        limit,
+        0,
     )
 
     results = []

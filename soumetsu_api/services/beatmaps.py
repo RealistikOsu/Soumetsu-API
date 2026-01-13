@@ -212,7 +212,6 @@ class RankRequestStatusResult:
 
 def _format_relative_time(unix_timestamp: int) -> str:
     import time as time_module
-    from datetime import datetime, timezone
 
     now = time_module.time()
     tomorrow = unix_timestamp + 86400
@@ -315,5 +314,9 @@ async def submit_rank_request(
         if beatmapset and all(b.ranked in (2, 3, 4, 5) for b in beatmapset):
             return BeatmapError.ALREADY_RANKED
 
-    request_id = await ctx.beatmaps.create_rank_request(user_id, beatmap_id, request_type)
+    request_id = await ctx.beatmaps.create_rank_request(
+        user_id,
+        beatmap_id,
+        request_type,
+    )
     return request_id
