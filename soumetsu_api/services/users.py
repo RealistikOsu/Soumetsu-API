@@ -1,0 +1,403 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import override
+
+from fastapi import status
+
+from soumetsu_api.services._common import AbstractContext
+from soumetsu_api.services._common import ServiceError
+from soumetsu_api.utilities import privileges
+
+
+class UserError(ServiceError):
+    USER_NOT_FOUND = "user_not_found"
+    USER_RESTRICTED = "user_restricted"
+    FORBIDDEN = "forbidden"
+    USERNAME_TAKEN = "username_taken"
+    USERNAME_RESERVED = "username_reserved"
+    INVALID_PLAYSTYLE = "invalid_playstyle"
+    INVALID_MODE = "invalid_mode"
+    NO_DISCORD_LINKED = "no_discord_linked"
+    INVALID_PASSWORD = "invalid_password"
+    WEAK_PASSWORD = "weak_password"
+
+    @override
+    def service(self) -> str:
+        return "users"
+
+    @override
+    def status_code(self) -> int:
+        match self:
+            case UserError.USER_NOT_FOUND | UserError.NO_DISCORD_LINKED:
+                return status.HTTP_404_NOT_FOUND
+            case UserError.USER_RESTRICTED:
+                return status.HTTP_403_FORBIDDEN
+            case UserError.FORBIDDEN:
+                return status.HTTP_403_FORBIDDEN
+            case UserError.USERNAME_TAKEN | UserError.USERNAME_RESERVED:
+                return status.HTTP_409_CONFLICT
+            case UserError.INVALID_PLAYSTYLE | UserError.INVALID_MODE | UserError.INVALID_PASSWORD | UserError.WEAK_PASSWORD:
+                return status.HTTP_400_BAD_REQUEST
+            case _:
+                return status.HTTP_500_INTERNAL_SERVER_ERROR
+
+
+@dataclass
+class UserProfile:
+    id: int
+    username: str
+    country: str
+    privileges: int
+    registered_at: int
+    latest_activity: int
+    is_online: bool
+    clan: ClanInfo | None
+    stats: UserStats
+
+
+@dataclass
+class UserStats:
+    mode: int
+    playstyle: int
+    global_rank: int
+    country_rank: int
+    pp: int
+    accuracy: float
+    playcount: int
+    total_score: int
+    ranked_score: int
+    total_hits: int
+    playtime: int
+    max_combo: int
+    replays_watched: int
+    level: int
+    first_places: int
+
+
+@dataclass
+class ClanInfo:
+    id: int
+    name: str
+    tag: str
+
+
+@dataclass
+class UserCompact:
+    id: int
+    username: str
+    country: str
+    privileges: int
+
+
+@dataclass
+class UserCard:
+    """Minimal user info for hover cards - optimized for fast loading."""
+
+    id: int
+    username: str
+    country: str
+    privileges: int
+    global_rank: int
+    country_rank: int
+    is_online: bool
+
+
+async def get_card(
+    ctx: AbstractContext,
+    user_id: int,
+) -> UserError.OnSuccess[UserCard]:
+    """Get minimal user info for hover cards. Optimized for speed."""
+    user = await ctx.users.find_by_id(user_id)
+    if not user:
+        return UserError.USER_NOT_FOUND
+
+    user_privs = privileges.UserPrivileges(user.privileges)
+    if privileges.is_restricted(user_privs):
+        return UserError.USER_RESTRICTED
+
+    # Get settings to find preferred mode
+    settings = await ctx.user_stats.get_settings(user_id)
+    mode = settings.favourite_mode if settings else 0
+    playstyle = settings.prefer_relax if settings else 0
+
+    # Only fetch rank data, not full stats
+    global_rank = await ctx.user_stats.get_global_rank(user_id, mode, playstyle)
+    country_rank = await ctx.user_stats.get_country_rank(
+        user_id, mode, playstyle, user.country
+    )
+
+    return UserCard(
+        id=user.id,
+        username=user.username,
+        country=user.country,
+        privileges=user.privileges,
+        global_rank=global_rank,
+        country_rank=country_rank,
+        is_online=False,  # TODO: check bancho presence
+    )
+
+
+async def get_profile(
+    ctx: AbstractContext,
+    user_id: int,
+    mode: int = 0,
+    playstyle: int = 0,
+) -> UserError.OnSuccess[UserProfile]:
+    if mode < 0 or mode > 3:
+        return UserError.INVALID_MODE
+
+    if playstyle < 0 or playstyle > 2:
+        return UserError.INVALID_PLAYSTYLE
+
+    user = await ctx.users.find_by_id(user_id)
+    if not user:
+        return UserError.USER_NOT_FOUND
+
+    user_privs = privileges.UserPrivileges(user.privileges)
+    if privileges.is_restricted(user_privs):
+        return UserError.USER_RESTRICTED
+
+    stats = await ctx.user_stats.get_stats(user_id, mode, playstyle)
+    global_rank = await ctx.user_stats.get_global_rank(user_id, mode, playstyle)
+    country_rank = await ctx.user_stats.get_country_rank(
+        user_id, mode, playstyle, user.country
+    )
+    first_places = await ctx.user_stats.get_first_place_count(user_id, mode, playstyle)
+
+    clan_info = await ctx.users.get_clan_info(user_id)
+
+    return UserProfile(
+        id=user.id,
+        username=user.username,
+        country=user.country,
+        privileges=user.privileges,
+        registered_at=user.register_datetime,
+        latest_activity=user.latest_activity,
+        is_online=False,  # TODO: check bancho presence
+        clan=clan_info,
+        stats=UserStats(
+            mode=mode,
+            playstyle=playstyle,
+            global_rank=global_rank,
+            country_rank=country_rank,
+            pp=stats.pp if stats else 0,
+            accuracy=stats.accuracy if stats else 0.0,
+            playcount=stats.playcount if stats else 0,
+            total_score=stats.total_score if stats else 0,
+            ranked_score=stats.ranked_score if stats else 0,
+            total_hits=stats.total_hits if stats else 0,
+            playtime=stats.playtime if stats else 0,
+            max_combo=stats.max_combo if stats else 0,
+            replays_watched=stats.replays_watched if stats else 0,
+            level=stats.level if stats else 1,
+            first_places=first_places,
+        ),
+    )
+
+
+async def get_by_username(
+    ctx: AbstractContext,
+    username: str,
+) -> UserError.OnSuccess[UserCompact]:
+    user = await ctx.users.find_by_username(username)
+    if not user:
+        return UserError.USER_NOT_FOUND
+
+    user_privs = privileges.UserPrivileges(user.privileges)
+    if privileges.is_restricted(user_privs):
+        return UserError.USER_RESTRICTED
+
+    return UserCompact(
+        id=user.id,
+        username=user.username,
+        country=user.country,
+        privileges=user.privileges,
+    )
+
+
+async def resolve_username(
+    ctx: AbstractContext,
+    username: str,
+) -> UserError.OnSuccess[int]:
+    user = await ctx.users.find_by_username(username)
+    if not user:
+        return UserError.USER_NOT_FOUND
+
+    return user.id
+
+
+async def search_users(
+    ctx: AbstractContext,
+    query: str,
+    page: int = 1,
+    limit: int = 50,
+) -> UserError.OnSuccess[list[UserCompact]]:
+    if limit > 100:
+        limit = 100
+    if page < 1:
+        page = 1
+
+    offset = (page - 1) * limit
+    users = await ctx.users.search(query, limit, offset)
+
+    return [
+        UserCompact(
+            id=u.id,
+            username=u.username,
+            country=u.country,
+            privileges=u.privileges,
+        )
+        for u in users
+        if not privileges.is_restricted(privileges.UserPrivileges(u.privileges))
+    ]
+
+
+@dataclass
+class UserSettings:
+    username_aka: str
+    favourite_mode: int
+    prefer_relax: int
+    play_style: int
+    show_country: bool
+
+
+async def get_settings(
+    ctx: AbstractContext,
+    user_id: int,
+) -> UserError.OnSuccess[UserSettings]:
+    settings = await ctx.user_stats.get_settings(user_id)
+    if not settings:
+        return UserError.USER_NOT_FOUND
+
+    return UserSettings(
+        username_aka=settings.username_aka,
+        favourite_mode=settings.favourite_mode,
+        prefer_relax=settings.prefer_relax,
+        play_style=settings.play_style,
+        show_country=settings.show_country,
+    )
+
+
+async def update_settings(
+    ctx: AbstractContext,
+    user_id: int,
+    username_aka: str | None = None,
+    favourite_mode: int | None = None,
+    prefer_relax: int | None = None,
+    play_style: int | None = None,
+    show_country: bool | None = None,
+) -> UserError.OnSuccess[None]:
+    await ctx.user_stats.update_settings(
+        user_id,
+        username_aka=username_aka,
+        favourite_mode=favourite_mode,
+        prefer_relax=prefer_relax,
+        play_style=play_style,
+        show_country=show_country,
+    )
+    return None
+
+
+async def get_userpage(
+    ctx: AbstractContext,
+    user_id: int,
+) -> UserError.OnSuccess[str]:
+    user = await ctx.users.find_by_id(user_id)
+    if not user:
+        return UserError.USER_NOT_FOUND
+
+    content = await ctx.user_stats.get_userpage(user_id)
+    return content or ""
+
+
+async def update_userpage(
+    ctx: AbstractContext,
+    user_id: int,
+    content: str,
+) -> UserError.OnSuccess[None]:
+    await ctx.user_stats.update_userpage(user_id, content)
+    return None
+
+
+async def change_username(
+    ctx: AbstractContext,
+    user_id: int,
+    new_username: str,
+) -> UserError.OnSuccess[None]:
+    import re
+
+    if not re.match(r"^[\w \[\]-]{2,15}$", new_username):
+        return UserError.USERNAME_RESERVED
+
+    user = await ctx.users.find_by_id(user_id)
+    if not user:
+        return UserError.USER_NOT_FOUND
+
+    if await ctx.users.username_exists(new_username):
+        if user.username.lower() != new_username.lower():
+            return UserError.USERNAME_TAKEN
+
+    if await ctx.users.username_in_history(new_username):
+        return UserError.USERNAME_RESERVED
+
+    await ctx.users.update_username(user_id, new_username, user.username)
+    return None
+
+
+async def unlink_discord(
+    ctx: AbstractContext,
+    user_id: int,
+) -> UserError.OnSuccess[None]:
+    discord_id = await ctx.users.get_discord_id(user_id)
+    if not discord_id:
+        return UserError.NO_DISCORD_LINKED
+
+    await ctx.users.unlink_discord(user_id)
+    return None
+
+
+async def get_email(
+    ctx: AbstractContext,
+    user_id: int,
+) -> UserError.OnSuccess[str]:
+    email = await ctx.users.get_email(user_id)
+    if not email:
+        return UserError.USER_NOT_FOUND
+
+    return email
+
+
+async def change_password(
+    ctx: AbstractContext,
+    user_id: int,
+    current_password: str,
+    new_password: str,
+    new_email: str | None = None,
+) -> UserError.OnSuccess[None]:
+    from soumetsu_api.utilities import crypto
+
+    password_data = await ctx.users.get_password_hash(user_id)
+    if not password_data:
+        return UserError.USER_NOT_FOUND
+
+    stored_hash, version = password_data
+
+    if version == 2:
+        if not crypto.verify_password(current_password, stored_hash):
+            return UserError.INVALID_PASSWORD
+    else:
+        md5_pass = crypto.hash_token_md5(current_password)
+        if not crypto.verify_password_md5(md5_pass, stored_hash):
+            return UserError.INVALID_PASSWORD
+
+    if new_password:
+        if len(new_password) < 8:
+            return UserError.WEAK_PASSWORD
+        new_hash = crypto.hash_password(new_password)
+        await ctx.users.update_password(user_id, new_hash)
+
+    if new_email:
+        await ctx.users.update_email(user_id, new_email)
+
+    return None
