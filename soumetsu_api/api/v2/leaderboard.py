@@ -12,24 +12,30 @@ from soumetsu_api.services import leaderboard
 router = APIRouter(prefix="/leaderboard")
 
 
-class LeaderboardEntryResponse(BaseModel):
-    user_id: int
-    username: str
-    country: str
+class LeaderboardModeStatsResponse(BaseModel):
     pp: int
     accuracy: float
     playcount: int
+    level: float
+
+
+class LeaderboardEntryResponse(BaseModel):
+    id: int
+    username: str
+    country: str
+    privileges: int
+    chosen_mode: LeaderboardModeStatsResponse
     rank: int
 
 
 class FirstPlaceResponse(BaseModel):
-    user_id: int
+    player_id: int
     username: str
     score_id: int
     beatmap_md5: str
     song_name: str
     pp: float
-    timestamp: int
+    achieved_at: int
     mode: int
 
 
@@ -41,25 +47,29 @@ def _to_response(
     e: leaderboard.LeaderboardEntryResult,
 ) -> LeaderboardEntryResponse:
     return LeaderboardEntryResponse(
-        user_id=e.user_id,
+        id=e.id,
         username=e.username,
         country=e.country,
-        pp=e.pp,
-        accuracy=e.accuracy,
-        playcount=e.playcount,
+        privileges=e.privileges,
+        chosen_mode=LeaderboardModeStatsResponse(
+            pp=e.chosen_mode.pp,
+            accuracy=e.chosen_mode.accuracy,
+            playcount=e.chosen_mode.playcount,
+            level=e.chosen_mode.level,
+        ),
         rank=e.rank,
     )
 
 
 def _first_to_response(f: leaderboard.FirstPlaceResult) -> FirstPlaceResponse:
     return FirstPlaceResponse(
-        user_id=f.user_id,
+        player_id=f.player_id,
         username=f.username,
         score_id=f.score_id,
         beatmap_md5=f.beatmap_md5,
         song_name=f.song_name,
         pp=f.pp,
-        timestamp=f.timestamp,
+        achieved_at=f.achieved_at,
         mode=f.mode,
     )
 
@@ -113,14 +123,14 @@ async def get_rank_for_pp(
     "/firsts/oldest",
     response_model=response.BaseResponse[list[FirstPlaceResponse]],
 )
-async def get_oldest_firsts(
+async def list_oldest_firsts(
     ctx: RequiresContext,
     mode: int = Query(0, ge=0, le=3),
     playstyle: int = Query(0, ge=0, le=2),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await leaderboard.get_oldest_firsts(ctx, mode, playstyle, page, limit)
+    result = await leaderboard.list_oldest_firsts(ctx, mode, playstyle, page, limit)
     result = response.unwrap(result)
 
     return response.create([_first_to_response(f) for f in result])

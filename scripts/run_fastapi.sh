@@ -13,4 +13,4 @@ if [ "${APP_DEV_MODE:-false}" = "true" ]; then
     UVICORN_ARGS+=("--reload")
 fi
 
-exec uvicorn app.main:asgi_app "${UVICORN_ARGS[@]}"
+exec uvicorn soumetsu_api.main:asgi_app "${UVICORN_ARGS[@]}"

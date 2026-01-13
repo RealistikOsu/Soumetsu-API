@@ -19,12 +19,14 @@ def hash_token_md5(token: str) -> str:
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    md5_hash = hashlib.md5(password.encode()).hexdigest()
+    return bcrypt.hashpw(md5_hash.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, hashed: str) -> bool:
     try:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
+        md5_hash = hashlib.md5(password.encode()).hexdigest()
+        return bcrypt.checkpw(md5_hash.encode(), hashed.encode())
     except (ValueError, TypeError):
         return False
 

@@ -12,7 +12,7 @@ class User(BaseModel):
     username_safe: str
     privileges: int
     country: str
-    register_datetime: int
+    registered_at: int
     latest_activity: int
     coins: int
 
@@ -36,7 +36,7 @@ class UserRepository:
     async def find_by_id(self, user_id: int) -> User | None:
         row = await self._mysql.fetch_one(
             """SELECT id, username, username_safe, privileges, country,
-                      register_datetime, latest_activity, coins
+                      register_datetime as registered_at, latest_activity, coins
                FROM users WHERE id = :id""",
             {"id": user_id},
         )
@@ -46,7 +46,7 @@ class UserRepository:
         username_safe = safe_username(username)
         row = await self._mysql.fetch_one(
             """SELECT id, username, username_safe, privileges, country,
-                      register_datetime, latest_activity, coins
+                      register_datetime as registered_at, latest_activity, coins
                FROM users WHERE username_safe = :username_safe""",
             {"username_safe": username_safe},
         )
@@ -100,7 +100,7 @@ class UserRepository:
         password_hash: str,
         api_key: str,
         privileges: int,
-        register_time: int,
+        registered_at: int,
     ) -> int:
         username_safe = safe_username(username)
         result = await self._mysql.execute(
@@ -109,7 +109,7 @@ class UserRepository:
                 privileges, register_datetime, password_version)
                VALUES
                (:username, :username_safe, :email, :password_md5, '', :api_key,
-                :privileges, :register_datetime, 2)""",
+                :privileges, :registered_at, 2)""",
             {
                 "username": username,
                 "username_safe": username_safe,
@@ -117,7 +117,7 @@ class UserRepository:
                 "password_md5": password_hash,
                 "api_key": api_key,
                 "privileges": privileges,
-                "register_datetime": register_time,
+                "registered_at": registered_at,
             },
         )
         return result
@@ -139,7 +139,7 @@ class UserRepository:
         username_pattern = f"%{query}%"
         rows = await self._mysql.fetch_all(
             """SELECT id, username, username_safe, privileges, country,
-                      register_datetime, latest_activity, coins
+                      register_datetime as registered_at, latest_activity, coins
                FROM users
                WHERE username LIKE :pattern
                AND privileges & 1 = 1

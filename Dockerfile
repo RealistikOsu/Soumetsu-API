@@ -15,7 +15,7 @@ COPY ./logging.yaml /app/logging.yaml
 
 
 # Copy the application
-COPY ./app /app/app
+COPY ./soumetsu_api /app/soumetsu_api
 WORKDIR /app
 
 ENTRYPOINT ["/app/scripts/bootstrap.sh"]

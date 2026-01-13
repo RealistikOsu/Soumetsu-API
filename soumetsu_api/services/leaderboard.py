@@ -29,49 +29,60 @@ class LeaderboardError(ServiceError):
 
 
 @dataclass
-class LeaderboardEntryResult:
-    user_id: int
-    username: str
-    country: str
+class LeaderboardModeStatsResult:
     pp: int
     accuracy: float
     playcount: int
+    level: float
+
+
+@dataclass
+class LeaderboardEntryResult:
+    id: int
+    username: str
+    country: str
+    privileges: int
+    chosen_mode: LeaderboardModeStatsResult
     rank: int
 
 
 @dataclass
 class FirstPlaceResult:
-    user_id: int
+    player_id: int
     username: str
     score_id: int
     beatmap_md5: str
     song_name: str
     pp: float
-    timestamp: int
+    achieved_at: int
     mode: int
 
 
 def _entry_to_result(e: LeaderboardEntry) -> LeaderboardEntryResult:
     return LeaderboardEntryResult(
-        user_id=e.user_id,
+        id=e.id,
         username=e.username,
         country=e.country,
-        pp=e.pp,
-        accuracy=e.accuracy,
-        playcount=e.playcount,
+        privileges=e.privileges,
+        chosen_mode=LeaderboardModeStatsResult(
+            pp=e.chosen_mode.pp,
+            accuracy=e.chosen_mode.accuracy,
+            playcount=e.chosen_mode.playcount,
+            level=e.chosen_mode.level,
+        ),
         rank=e.rank,
     )
 
 
 def _first_to_result(f: FirstPlaceEntry) -> FirstPlaceResult:
     return FirstPlaceResult(
-        user_id=f.user_id,
+        player_id=f.player_id,
         username=f.username,
         score_id=f.score_id,
         beatmap_md5=f.beatmap_md5,
         song_name=f.song_name,
         pp=f.pp,
-        timestamp=f.timestamp,
+        achieved_at=f.achieved_at,
         mode=f.mode,
     )
 
@@ -134,7 +145,7 @@ async def get_rank_for_pp(
     return await ctx.leaderboard.get_rank_for_pp(pp, mode, playstyle)
 
 
-async def get_oldest_firsts(
+async def list_oldest_firsts(
     ctx: AbstractContext,
     mode: int = 0,
     playstyle: int = 0,
@@ -151,5 +162,5 @@ async def get_oldest_firsts(
         limit = 100
     offset = (page - 1) * limit
 
-    entries = await ctx.leaderboard.get_oldest_firsts(mode, playstyle, limit, offset)
+    entries = await ctx.leaderboard.list_oldest_firsts(mode, playstyle, limit, offset)
     return [_first_to_result(f) for f in entries]

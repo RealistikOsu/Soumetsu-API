@@ -299,7 +299,7 @@ async def get_beatmaps(
     limit: int = Query(500),
 ) -> Response:
     if b:
-        beatmap = await ctx.beatmaps.get_by_id(b)
+        beatmap = await ctx.beatmaps.find_by_id(b)
         if not beatmap:
             return Response(content="[]", media_type="application/json")
 
@@ -310,7 +310,7 @@ async def get_beatmaps(
         )
 
     if h:
-        beatmap = await ctx.beatmaps.get_by_md5(h)
+        beatmap = await ctx.beatmaps.find_by_md5(h)
         if not beatmap:
             return Response(content="[]", media_type="application/json")
 
@@ -321,7 +321,7 @@ async def get_beatmaps(
         )
 
     if s:
-        beatmaps = await ctx.beatmaps.get_beatmapset(s)
+        beatmaps = await ctx.beatmaps.list_beatmapset(s)
         results = [_beatmap_to_compact_response(bm) for bm in beatmaps]
         json_items = ",".join(r.model_dump_json() for r in results)
         return Response(
@@ -342,17 +342,17 @@ async def get_scores(
 ) -> Response:
     mode = _mode_from_param(m)
 
-    beatmap = await ctx.beatmaps.get_by_id(b)
+    beatmap = await ctx.beatmaps.find_by_id(b)
     if not beatmap:
         return Response(content="[]", media_type="application/json")
 
-    scores = await ctx.scores.get_beatmap_scores(
+    scores = await ctx.scores.list_beatmap_scores(
         beatmap.beatmap_md5, mode, 0, limit, 0
     )
 
     results = []
     for s in scores:
-        user = await ctx.users.find_by_id(s.user_id)
+        user = await ctx.users.find_by_id(s.player_id)
         results.append(
             PeppyScoreResponse(
                 score_id=str(s.id),
@@ -367,8 +367,8 @@ async def get_scores(
                 countgeki=str(s.count_gekis),
                 perfect="1" if s.full_combo else "0",
                 enabled_mods=str(s.mods),
-                user_id=str(s.user_id),
-                date=s.time,
+                user_id=str(s.player_id),
+                date=s.submitted_at,
                 rank="",
                 pp=str(s.pp),
                 replay_available="0",
@@ -405,7 +405,7 @@ async def get_user_best(
     if privileges.is_restricted(user_privs):
         return Response(content="[]", media_type="application/json")
 
-    scores = await ctx.scores.get_user_best(user.id, mode, 0, min(limit, 100), 0)
+    scores = await ctx.scores.list_player_best(user.id, mode, 0, min(limit, 100), 0)
 
     results = [
         PeppyUserScoreResponse(
@@ -422,7 +422,7 @@ async def get_user_best(
             perfect="1" if s.full_combo else "0",
             enabled_mods=str(s.mods),
             user_id=str(user.id),
-            date=s.time,
+            date=s.submitted_at,
             rank="",
             pp=str(s.pp),
             replay_available="0",
@@ -460,7 +460,7 @@ async def get_user_recent(
     if privileges.is_restricted(user_privs):
         return Response(content="[]", media_type="application/json")
 
-    scores = await ctx.scores.get_user_recent(user.id, mode, 0, min(limit, 50), 0)
+    scores = await ctx.scores.list_player_recent(user.id, mode, 0, min(limit, 50), 0)
 
     results = [
         PeppyUserScoreResponse(
@@ -477,7 +477,7 @@ async def get_user_recent(
             perfect="1" if s.full_combo else "0",
             enabled_mods=str(s.mods),
             user_id=str(user.id),
-            date=s.time,
+            date=s.submitted_at,
             rank="",
             pp=str(s.pp),
             replay_available="0",

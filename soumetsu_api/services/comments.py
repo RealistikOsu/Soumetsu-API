@@ -40,17 +40,17 @@ class CommentResult:
     author_username: str
     profile_id: int
     message: str
-    created_at: str
+    created_at: int
 
 
 def _comment_to_result(c: CommentData) -> CommentResult:
     return CommentResult(
         id=c.id,
-        author_id=c.op,
-        author_username=c.op_username,
-        profile_id=c.prof,
-        message=c.msg,
-        created_at=c.comment_date,
+        author_id=c.author_id,
+        author_username=c.author_username,
+        profile_id=c.profile_id,
+        message=c.message,
+        created_at=int(c.created_at) if c.created_at else 0,
     )
 
 
@@ -58,20 +58,20 @@ async def get_comment(
     ctx: AbstractContext,
     comment_id: int,
 ) -> CommentError.OnSuccess[CommentResult]:
-    comment = await ctx.comments.get_by_id(comment_id)
+    comment = await ctx.comments.find_by_id(comment_id)
     if not comment:
         return CommentError.COMMENT_NOT_FOUND
 
     return _comment_to_result(comment)
 
 
-async def get_user_comments(
+async def list_profile_comments(
     ctx: AbstractContext,
-    user_id: int,
+    profile_id: int,
     page: int = 1,
     limit: int = 50,
 ) -> CommentError.OnSuccess[list[CommentResult]]:
-    user = await ctx.users.find_by_id(user_id)
+    user = await ctx.users.find_by_id(profile_id)
     if not user:
         return CommentError.USER_NOT_FOUND
 
@@ -83,7 +83,7 @@ async def get_user_comments(
         limit = 100
     offset = (page - 1) * limit
 
-    comments = await ctx.comments.get_for_user(user_id, limit, offset)
+    comments = await ctx.comments.list_for_profile(profile_id, limit, offset)
     return [_comment_to_result(c) for c in comments]
 
 
@@ -101,15 +101,15 @@ async def create_comment(
     if privileges.is_restricted(user_privs):
         return CommentError.USER_NOT_FOUND
 
-    comment_date = str(int(time.time()))
+    created_at = str(int(time.time()))
     comment_id = await ctx.comments.create(
-        author_id,
-        profile_id,
-        message,
-        comment_date,
+        author_id=author_id,
+        profile_id=profile_id,
+        message=message,
+        created_at=created_at,
     )
 
-    comment = await ctx.comments.get_by_id(comment_id)
+    comment = await ctx.comments.find_by_id(comment_id)
     if not comment:
         return CommentError.COMMENT_NOT_FOUND
 
@@ -122,11 +122,11 @@ async def delete_comment(
     comment_id: int,
     is_admin: bool = False,
 ) -> CommentError.OnSuccess[None]:
-    owner = await ctx.comments.get_owner(comment_id)
-    if owner is None:
+    author_id = await ctx.comments.find_author_id(comment_id)
+    if author_id is None:
         return CommentError.COMMENT_NOT_FOUND
 
-    if owner != user_id and not is_admin:
+    if author_id != user_id and not is_admin:
         return CommentError.FORBIDDEN
 
     await ctx.comments.delete(comment_id)

@@ -20,12 +20,12 @@ class CommentResponse(BaseModel):
     author_username: str
     profile_id: int
     message: str
-    created_at: str
+    created_at: int
 
 
 class CreateCommentRequest(BaseModel):
-    target_id: int
-    content: str
+    profile_id: int
+    message: str
 
 
 def _to_response(c: comments.CommentResult) -> CommentResponse:
@@ -57,9 +57,9 @@ async def create_comment(
 ) -> Response:
     result = await comments.create_comment(
         ctx,
-        ctx.user_id,
-        body.target_id,
-        body.content,
+        author_id=ctx.user_id,
+        profile_id=body.profile_id,
+        message=body.message,
     )
     result = response.unwrap(result)
 
@@ -88,16 +88,16 @@ async def delete_comment(
 
 
 @router.get(
-    "/users/{user_id}",
+    "/profile/{profile_id}",
     response_model=response.BaseResponse[list[CommentResponse]],
 )
-async def get_user_comments(
+async def list_profile_comments(
     ctx: RequiresContext,
-    user_id: int,
+    profile_id: int,
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await comments.get_user_comments(ctx, user_id, page, limit)
+    result = await comments.list_profile_comments(ctx, profile_id, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(c) for c in result])

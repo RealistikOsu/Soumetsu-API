@@ -146,7 +146,7 @@ async def register(
         password_hash=password_hash,
         api_key=api_key,
         privileges=int(initial_privileges),
-        register_time=int(time.time()),
+        registered_at=int(time.time()),
     )
 
     await ctx.user_stats.initialise_all(user_id, username)

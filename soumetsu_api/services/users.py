@@ -183,7 +183,7 @@ async def get_profile(
         username=user.username,
         country=user.country,
         privileges=user.privileges,
-        registered_at=user.register_datetime,
+        registered_at=user.registered_at,
         latest_activity=user.latest_activity,
         is_online=False,  # TODO: check bancho presence
         clan=clan_info,

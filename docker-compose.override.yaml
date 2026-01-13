@@ -1,8 +1,0 @@
-# Development overrides - automatically loaded by Docker Compose
-# To run without dev mode: docker compose -f docker-compose.yaml up
-services:
-  soumetsu-api:
-    environment:
-      - APP_DEV_MODE=true
-    volumes:
-      - ./soumetsu_api:/app/soumetsu_api:ro

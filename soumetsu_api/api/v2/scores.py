@@ -16,7 +16,7 @@ router = APIRouter()
 class ScoreResponse(BaseModel):
     id: int
     beatmap_md5: str
-    user_id: int
+    player_id: int
     score: int
     max_combo: int
     full_combo: bool
@@ -27,7 +27,7 @@ class ScoreResponse(BaseModel):
     count_katus: int
     count_gekis: int
     count_misses: int
-    time: str
+    submitted_at: int
     play_mode: int
     completed: int
     accuracy: float
@@ -35,10 +35,16 @@ class ScoreResponse(BaseModel):
     playtime: int
 
 
-class ScoreWithBeatmapResponse(ScoreResponse):
+class BeatmapInfo(BaseModel):
     beatmap_id: int
+    beatmapset_id: int
     song_name: str
     difficulty: float
+    ranked: int
+
+
+class ScoreWithBeatmapResponse(ScoreResponse):
+    beatmap: BeatmapInfo
 
 
 @router.get("/scores/{score_id}", response_model=response.BaseResponse[ScoreResponse])
@@ -54,7 +60,7 @@ async def get_score(
         ScoreResponse(
             id=result.id,
             beatmap_md5=result.beatmap_md5,
-            user_id=result.user_id,
+            player_id=result.player_id,
             score=result.score,
             max_combo=result.max_combo,
             full_combo=result.full_combo,
@@ -65,7 +71,7 @@ async def get_score(
             count_katus=result.count_katus,
             count_gekis=result.count_gekis,
             count_misses=result.count_misses,
-            time=result.time,
+            submitted_at=result.submitted_at,
             play_mode=result.play_mode,
             completed=result.completed,
             accuracy=result.accuracy,
@@ -102,7 +108,7 @@ def _to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
     return ScoreWithBeatmapResponse(
         id=s.id,
         beatmap_md5=s.beatmap_md5,
-        user_id=s.user_id,
+        player_id=s.player_id,
         score=s.score,
         max_combo=s.max_combo,
         full_combo=s.full_combo,
@@ -113,15 +119,19 @@ def _to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
         count_katus=s.count_katus,
         count_gekis=s.count_gekis,
         count_misses=s.count_misses,
-        time=s.time,
+        submitted_at=s.submitted_at,
         play_mode=s.play_mode,
         completed=s.completed,
         accuracy=s.accuracy,
         pp=s.pp,
         playtime=s.playtime,
-        beatmap_id=s.beatmap_id,
-        song_name=s.song_name,
-        difficulty=s.difficulty,
+        beatmap=BeatmapInfo(
+            beatmap_id=s.beatmap_id,
+            beatmapset_id=s.beatmapset_id,
+            song_name=s.song_name,
+            difficulty=s.difficulty,
+            ranked=s.ranked,
+        ),
     )
 
 
@@ -129,7 +139,7 @@ def _to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
     "/users/{user_id}/scores/best",
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
-async def get_user_best(
+async def get_player_best(
     ctx: RequiresContext,
     user_id: int,
     mode: int = Query(0, ge=0, le=3),
@@ -137,7 +147,7 @@ async def get_user_best(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_user_best(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_best(ctx, user_id, mode, playstyle, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])
@@ -147,7 +157,7 @@ async def get_user_best(
     "/users/{user_id}/scores/recent",
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
-async def get_user_recent(
+async def get_player_recent(
     ctx: RequiresContext,
     user_id: int,
     mode: int = Query(0, ge=0, le=3),
@@ -155,7 +165,7 @@ async def get_user_recent(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_user_recent(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_recent(ctx, user_id, mode, playstyle, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])
@@ -165,7 +175,7 @@ async def get_user_recent(
     "/users/{user_id}/scores/firsts",
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
-async def get_user_firsts(
+async def get_player_firsts(
     ctx: RequiresContext,
     user_id: int,
     mode: int = Query(0, ge=0, le=3),
@@ -173,7 +183,7 @@ async def get_user_firsts(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_user_firsts(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_firsts(ctx, user_id, mode, playstyle, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])
@@ -183,7 +193,7 @@ async def get_user_firsts(
     "/users/{user_id}/scores/pinned",
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
-async def get_user_pinned(
+async def get_player_pinned(
     ctx: RequiresContext,
     user_id: int,
     mode: int = Query(0, ge=0, le=3),
@@ -191,7 +201,7 @@ async def get_user_pinned(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_user_pinned(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_pinned(ctx, user_id, mode, playstyle, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])

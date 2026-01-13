@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time as time_module
+
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
@@ -23,8 +25,8 @@ class BeatmapData(BaseModel):
     playcount: int
     passcount: int
     ranked: int
-    latest_update: int
-    ranked_status_freezed: bool
+    updated_at: int
+    ranked_status_frozen: bool
     mapper_id: int
 
 
@@ -35,19 +37,29 @@ class MostPlayedBeatmapData(BaseModel):
     playcount: int
 
 
+class RankRequestData(BaseModel):
+    id: int
+    requester_id: int
+    beatmap_id: int
+    request_type: str
+    requested_at: int
+    blacklisted: bool
+
+
 class BeatmapsRepository:
     __slots__ = ("_mysql",)
 
     def __init__(self, mysql: ImplementsMySQL) -> None:
         self._mysql = mysql
 
-    async def get_by_id(self, beatmap_id: int) -> BeatmapData | None:
+    async def find_by_id(self, beatmap_id: int) -> BeatmapData | None:
         row = await self._mysql.fetch_one(
             """SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
                       ar, od, mode, difficulty_std, difficulty_taiko,
                       difficulty_ctb, difficulty_mania, max_combo,
                       hit_length, bpm, playcount, passcount, ranked,
-                      latest_update, ranked_status_freezed, mapper_id
+                      latest_update as updated_at,
+                      ranked_status_freezed as ranked_status_frozen, mapper_id
                FROM beatmaps WHERE beatmap_id = :beatmap_id""",
             {"beatmap_id": beatmap_id},
         )
@@ -56,13 +68,14 @@ class BeatmapsRepository:
 
         return BeatmapData(**row)
 
-    async def get_by_md5(self, beatmap_md5: str) -> BeatmapData | None:
+    async def find_by_md5(self, beatmap_md5: str) -> BeatmapData | None:
         row = await self._mysql.fetch_one(
             """SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
                       ar, od, mode, difficulty_std, difficulty_taiko,
                       difficulty_ctb, difficulty_mania, max_combo,
                       hit_length, bpm, playcount, passcount, ranked,
-                      latest_update, ranked_status_freezed, mapper_id
+                      latest_update as updated_at,
+                      ranked_status_freezed as ranked_status_frozen, mapper_id
                FROM beatmaps WHERE beatmap_md5 = :beatmap_md5""",
             {"beatmap_md5": beatmap_md5},
         )
@@ -101,7 +114,8 @@ class BeatmapsRepository:
                        ar, od, mode, difficulty_std, difficulty_taiko,
                        difficulty_ctb, difficulty_mania, max_combo,
                        hit_length, bpm, playcount, passcount, ranked,
-                       latest_update, ranked_status_freezed, mapper_id
+                       latest_update as updated_at,
+                       ranked_status_freezed as ranked_status_frozen, mapper_id
                 FROM beatmaps
                 WHERE {where_clause}
                 ORDER BY playcount DESC
@@ -110,7 +124,7 @@ class BeatmapsRepository:
         )
         return [BeatmapData(**row) for row in rows]
 
-    async def get_popular(
+    async def list_popular(
         self,
         mode: int | None = None,
         limit: int = 50,
@@ -130,7 +144,8 @@ class BeatmapsRepository:
                        ar, od, mode, difficulty_std, difficulty_taiko,
                        difficulty_ctb, difficulty_mania, max_combo,
                        hit_length, bpm, playcount, passcount, ranked,
-                       latest_update, ranked_status_freezed, mapper_id
+                       latest_update as updated_at,
+                       ranked_status_freezed as ranked_status_frozen, mapper_id
                 FROM beatmaps
                 WHERE {where_clause}
                 ORDER BY playcount DESC
@@ -139,7 +154,7 @@ class BeatmapsRepository:
         )
         return [BeatmapData(**row) for row in rows]
 
-    async def get_beatmapset(
+    async def list_beatmapset(
         self,
         beatmapset_id: int,
     ) -> list[BeatmapData]:
@@ -148,7 +163,8 @@ class BeatmapsRepository:
                       ar, od, mode, difficulty_std, difficulty_taiko,
                       difficulty_ctb, difficulty_mania, max_combo,
                       hit_length, bpm, playcount, passcount, ranked,
-                      latest_update, ranked_status_freezed, mapper_id
+                      latest_update as updated_at,
+                      ranked_status_freezed as ranked_status_frozen, mapper_id
                FROM beatmaps WHERE beatmapset_id = :beatmapset_id
                ORDER BY difficulty_std ASC""",
             {"beatmapset_id": beatmapset_id},
@@ -180,3 +196,72 @@ class BeatmapsRepository:
             {"user_id": user_id, "mode": mode, "limit": limit, "offset": offset},
         )
         return [MostPlayedBeatmapData(**row) for row in rows]
+
+    async def count_rank_requests_today(self) -> int:
+        today_start = int(time_module.time()) - (int(time_module.time()) % 86400)
+
+        result = await self._mysql.fetch_val(
+            """SELECT COUNT(*) FROM rank_requests
+               WHERE blacklisted = 0 AND time >= :today_start""",
+            {"today_start": today_start},
+        )
+        return result or 0
+
+    async def count_user_rank_requests_today(self, requester_id: int) -> int:
+        today_start = int(time_module.time()) - (int(time_module.time()) % 86400)
+
+        result = await self._mysql.fetch_val(
+            """SELECT COUNT(*) FROM rank_requests
+               WHERE userid = :requester_id AND time >= :today_start""",
+            {"requester_id": requester_id, "today_start": today_start},
+        )
+        return result or 0
+
+    async def find_rank_request_by_beatmap(
+        self,
+        beatmap_id: int,
+        request_type: str,
+    ) -> RankRequestData | None:
+        row = await self._mysql.fetch_one(
+            """SELECT id, userid as requester_id, bid as beatmap_id,
+                      type as request_type, time as requested_at, blacklisted
+               FROM rank_requests
+               WHERE bid = :beatmap_id AND type = :request_type""",
+            {"beatmap_id": beatmap_id, "request_type": request_type},
+        )
+        if not row:
+            return None
+        return RankRequestData(**row)
+
+    async def create_rank_request(
+        self,
+        requester_id: int,
+        beatmap_id: int,
+        request_type: str,
+    ) -> int:
+        requested_at = int(time_module.time())
+        await self._mysql.execute(
+            """INSERT INTO rank_requests (userid, bid, type, time, blacklisted)
+               VALUES (:requester_id, :beatmap_id, :request_type, :requested_at, 0)""",
+            {
+                "requester_id": requester_id,
+                "beatmap_id": beatmap_id,
+                "request_type": request_type,
+                "requested_at": requested_at,
+            },
+        )
+        result = await self._mysql.fetch_val("SELECT LAST_INSERT_ID()")
+        return result or 0
+
+    async def find_user_oldest_rank_request_today(
+        self,
+        requester_id: int,
+    ) -> int | None:
+        today_start = int(time_module.time()) - (int(time_module.time()) % 86400)
+
+        result = await self._mysql.fetch_val(
+            """SELECT MIN(time) FROM rank_requests
+               WHERE userid = :requester_id AND time >= :today_start""",
+            {"requester_id": requester_id, "today_start": today_start},
+        )
+        return result

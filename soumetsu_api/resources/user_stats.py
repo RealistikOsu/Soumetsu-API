@@ -108,7 +108,7 @@ class UserStatsRepository:
         suffix = self._get_mode_suffix(mode)
 
         query = f"""
-            SELECT COUNT(*) + 1 as rank
+            SELECT COUNT(*) + 1 as `rank`
             FROM {table} s
             INNER JOIN users u ON s.id = u.id
             WHERE s.pp_{suffix} > (
@@ -130,7 +130,7 @@ class UserStatsRepository:
         suffix = self._get_mode_suffix(mode)
 
         query = f"""
-            SELECT COUNT(*) + 1 as rank
+            SELECT COUNT(*) + 1 as `rank`
             FROM {table} s
             INNER JOIN users u ON s.id = u.id
             WHERE s.pp_{suffix} > (

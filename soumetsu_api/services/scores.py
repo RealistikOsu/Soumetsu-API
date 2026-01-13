@@ -41,7 +41,7 @@ class ScoreError(ServiceError):
 class ScoreResult:
     id: int
     beatmap_md5: str
-    user_id: int
+    player_id: int
     score: int
     max_combo: int
     full_combo: bool
@@ -52,7 +52,7 @@ class ScoreResult:
     count_katus: int
     count_gekis: int
     count_misses: int
-    time: str
+    submitted_at: int
     play_mode: int
     completed: int
     accuracy: float
@@ -63,15 +63,17 @@ class ScoreResult:
 @dataclass
 class ScoreWithBeatmapResult(ScoreResult):
     beatmap_id: int
+    beatmapset_id: int
     song_name: str
     difficulty: float
+    ranked: int
 
 
 def _score_to_result(score: ScoreData) -> ScoreResult:
     return ScoreResult(
         id=score.id,
         beatmap_md5=score.beatmap_md5,
-        user_id=score.user_id,
+        player_id=score.player_id,
         score=score.score,
         max_combo=score.max_combo,
         full_combo=score.full_combo,
@@ -82,7 +84,7 @@ def _score_to_result(score: ScoreData) -> ScoreResult:
         count_katus=score.count_katus,
         count_gekis=score.count_gekis,
         count_misses=score.count_misses,
-        time=score.time,
+        submitted_at=score.submitted_at,
         play_mode=score.play_mode,
         completed=score.completed,
         accuracy=score.accuracy,
@@ -95,7 +97,7 @@ def _score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapRe
     return ScoreWithBeatmapResult(
         id=score.id,
         beatmap_md5=score.beatmap_md5,
-        user_id=score.user_id,
+        player_id=score.player_id,
         score=score.score,
         max_combo=score.max_combo,
         full_combo=score.full_combo,
@@ -106,15 +108,17 @@ def _score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapRe
         count_katus=score.count_katus,
         count_gekis=score.count_gekis,
         count_misses=score.count_misses,
-        time=score.time,
+        submitted_at=score.submitted_at,
         play_mode=score.play_mode,
         completed=score.completed,
         accuracy=score.accuracy,
         pp=score.pp,
         playtime=score.playtime,
         beatmap_id=score.beatmap_id,
+        beatmapset_id=score.beatmapset_id,
         song_name=score.song_name,
         difficulty=score.difficulty,
+        ranked=score.ranked,
     )
 
 
@@ -123,22 +127,22 @@ async def get_score(
     score_id: int,
     playstyle: int = 0,
 ) -> ScoreError.OnSuccess[ScoreResult]:
-    score = await ctx.scores.get_by_id(score_id, playstyle)
+    score = await ctx.scores.find_by_id(score_id, playstyle)
     if not score:
         return ScoreError.SCORE_NOT_FOUND
 
     return _score_to_result(score)
 
 
-async def get_user_best(
+async def get_player_best(
     ctx: AbstractContext,
-    user_id: int,
+    player_id: int,
     mode: int = 0,
     playstyle: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
-    user = await ctx.users.find_by_id(user_id)
+    user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
@@ -150,19 +154,19 @@ async def get_user_best(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.get_user_best(user_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_best(player_id, mode, playstyle, limit, offset)
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 
-async def get_user_recent(
+async def get_player_recent(
     ctx: AbstractContext,
-    user_id: int,
+    player_id: int,
     mode: int = 0,
     playstyle: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
-    user = await ctx.users.find_by_id(user_id)
+    user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
@@ -174,19 +178,19 @@ async def get_user_recent(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.get_user_recent(user_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_recent(player_id, mode, playstyle, limit, offset)
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 
-async def get_user_firsts(
+async def get_player_firsts(
     ctx: AbstractContext,
-    user_id: int,
+    player_id: int,
     mode: int = 0,
     playstyle: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
-    user = await ctx.users.find_by_id(user_id)
+    user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
@@ -198,19 +202,19 @@ async def get_user_firsts(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.get_user_firsts(user_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_firsts(player_id, mode, playstyle, limit, offset)
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 
-async def get_user_pinned(
+async def get_player_pinned(
     ctx: AbstractContext,
-    user_id: int,
+    player_id: int,
     mode: int = 0,
     playstyle: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
-    user = await ctx.users.find_by_id(user_id)
+    user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
@@ -222,37 +226,37 @@ async def get_user_pinned(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.get_user_pinned(user_id, mode, playstyle, limit, offset)
+    scores = await ctx.scores.list_player_pinned(player_id, mode, playstyle, limit, offset)
     return [_score_with_beatmap_to_result(s) for s in scores]
 
 
 async def pin_score(
     ctx: AbstractContext,
-    user_id: int,
+    player_id: int,
     score_id: int,
     playstyle: int = 0,
 ) -> ScoreError.OnSuccess[None]:
-    score = await ctx.scores.get_by_id(score_id, playstyle)
+    score = await ctx.scores.find_by_id(score_id, playstyle)
     if not score:
         return ScoreError.SCORE_NOT_FOUND
 
-    if score.user_id != user_id:
+    if score.player_id != player_id:
         return ScoreError.NOT_YOUR_SCORE
 
-    if await ctx.scores.is_pinned(user_id, score_id):
+    if await ctx.scores.is_pinned(player_id, score_id):
         return ScoreError.ALREADY_PINNED
 
-    await ctx.scores.pin_score(user_id, score_id)
+    await ctx.scores.pin_score(player_id, score_id)
     return None
 
 
 async def unpin_score(
     ctx: AbstractContext,
-    user_id: int,
+    player_id: int,
     score_id: int,
 ) -> ScoreError.OnSuccess[None]:
-    if not await ctx.scores.is_pinned(user_id, score_id):
+    if not await ctx.scores.is_pinned(player_id, score_id):
         return ScoreError.NOT_PINNED
 
-    await ctx.scores.unpin_score(user_id, score_id)
+    await ctx.scores.unpin_score(player_id, score_id)
     return None

@@ -59,6 +59,12 @@ class HTTPTransactionContext(AbstractContext):
         return self._redis_conn
 
 
+class OptionalAuthContext(HTTPContext):
+    def __init__(self, request: Request, session: SessionData | None) -> None:
+        super().__init__(request)
+        self.session = session
+
+
 class AuthenticatedContext(HTTPContext):
     def __init__(self, request: Request, session: SessionData) -> None:
         super().__init__(request)
@@ -109,6 +115,11 @@ async def _get_session(request: Request) -> SessionData | None:
     return await sessions.get(token)
 
 
+async def _optional_auth(request: Request) -> OptionalAuthContext:
+    session = await _get_session(request)
+    return OptionalAuthContext(request, session)
+
+
 async def _require_auth(request: Request) -> AuthenticatedContext:
     session = await _get_session(request)
     if not session:
@@ -142,6 +153,8 @@ RequiresTransaction = Annotated[
     HTTPTransactionContext,
     Depends(_get_transaction_context),
 ]
+
+OptionalAuth = Annotated[OptionalAuthContext, Depends(_optional_auth)]
 
 RequiresAuth = Annotated[AuthenticatedContext, Depends(_require_auth)]
 

@@ -17,9 +17,9 @@ router = APIRouter(prefix="/auth")
 
 
 class LoginRequest(BaseModel):
-    identifier: str
+    username: str
     password: str
-    captcha_token: str | None = None
+    captcha: str | None = None
 
 
 class LoginResponse(BaseModel):
@@ -33,7 +33,7 @@ class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
-    captcha_token: str | None = None
+    captcha: str | None = None
 
 
 class RegisterResponse(BaseModel):
@@ -54,9 +54,9 @@ async def login(
     ctx: RequiresContext,
     body: LoginRequest,
 ) -> Response:
-    if body.captcha_token:
+    if body.captcha:
         captcha_valid = await hcaptcha.verify_token(
-            body.captcha_token,
+            body.captcha,
             request.client.host if request.client else None,
         )
         if not captcha_valid:
@@ -69,7 +69,7 @@ async def login(
 
     result = await auth.login(
         ctx,
-        identifier=body.identifier,
+        identifier=body.username,
         password=body.password,
         ip_address=ip_address,
     )
@@ -98,9 +98,9 @@ async def register(
     ctx: RequiresContext,
     body: RegisterRequest,
 ) -> Response:
-    if body.captcha_token:
+    if body.captcha:
         captcha_valid = await hcaptcha.verify_token(
-            body.captcha_token,
+            body.captcha,
             request.client.host if request.client else None,
         )
         if not captcha_valid:

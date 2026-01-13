@@ -6,6 +6,8 @@ from fastapi import Response
 from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
+from soumetsu_api.api.v2.context import OptionalAuth
+from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import beatmaps
 
@@ -30,15 +32,21 @@ class BeatmapResponse(BaseModel):
     playcount: int
     passcount: int
     ranked: int
-    latest_update: int
-    ranked_status_freezed: bool
+    updated_at: int
+    ranked_status_frozen: bool
     mapper_id: int
+
+
+class ScorePlayerResponse(BaseModel):
+    player_id: int
+    username: str
+    country: str
 
 
 class ScoreResponse(BaseModel):
     id: int
     beatmap_md5: str
-    user_id: int
+    player_id: int
     score: int
     max_combo: int
     full_combo: bool
@@ -49,12 +57,13 @@ class ScoreResponse(BaseModel):
     count_katus: int
     count_gekis: int
     count_misses: int
-    time: str
+    submitted_at: int
     play_mode: int
     completed: int
     accuracy: float
     pp: float
     playtime: int
+    player: ScorePlayerResponse
 
 
 def _to_response(b: beatmaps.BeatmapResult) -> BeatmapResponse:
@@ -76,8 +85,8 @@ def _to_response(b: beatmaps.BeatmapResult) -> BeatmapResponse:
         playcount=b.playcount,
         passcount=b.passcount,
         ranked=b.ranked,
-        latest_update=b.latest_update,
-        ranked_status_freezed=b.ranked_status_freezed,
+        updated_at=b.updated_at,
+        ranked_status_frozen=b.ranked_status_frozen,
         mapper_id=b.mapper_id,
     )
 
@@ -165,7 +174,7 @@ async def get_beatmap_scores(
         limit = 100
     offset = (page - 1) * limit
 
-    scores = await ctx.scores.get_beatmap_scores(
+    scores_list = await ctx.scores.list_beatmap_scores(
         beatmap.beatmap_md5,
         mode,
         playstyle,
@@ -178,7 +187,7 @@ async def get_beatmap_scores(
             ScoreResponse(
                 id=s.id,
                 beatmap_md5=s.beatmap_md5,
-                user_id=s.user_id,
+                player_id=s.player_id,
                 score=s.score,
                 max_combo=s.max_combo,
                 full_combo=s.full_combo,
@@ -189,13 +198,70 @@ async def get_beatmap_scores(
                 count_katus=s.count_katus,
                 count_gekis=s.count_gekis,
                 count_misses=s.count_misses,
-                time=s.time,
+                submitted_at=s.submitted_at,
                 play_mode=s.play_mode,
                 completed=s.completed,
                 accuracy=s.accuracy,
                 pp=s.pp,
                 playtime=s.playtime,
+                player=ScorePlayerResponse(
+                    player_id=s.player.player_id,
+                    username=s.player.username,
+                    country=s.player.country,
+                ),
             )
-            for s in scores
+            for s in scores_list
         ],
     )
+
+
+class RankRequestStatusResponse(BaseModel):
+    submitted: int
+    queue_size: int
+    can_submit: bool
+    submitted_by_user: int | None = None
+    max_per_user: int | None = None
+    next_expiration: str | None = None
+
+
+class RankRequestSubmitRequest(BaseModel):
+    url: str
+
+
+class RankRequestSubmitResponse(BaseModel):
+    request_id: int
+
+
+@router.get(
+    "/rank-requests/status",
+    response_model=response.BaseResponse[RankRequestStatusResponse],
+)
+async def get_rank_request_status(ctx: OptionalAuth) -> Response:
+    user_id = ctx.session.user_id if ctx.session else None
+    result = await beatmaps.get_rank_request_status(ctx, user_id)
+    result = response.unwrap(result)
+
+    return response.create(
+        RankRequestStatusResponse(
+            submitted=result.submitted,
+            queue_size=result.queue_size,
+            can_submit=result.can_submit,
+            submitted_by_user=result.submitted_by_user,
+            max_per_user=result.max_per_user,
+            next_expiration=result.next_expiration,
+        ),
+    )
+
+
+@router.post(
+    "/rank-requests",
+    response_model=response.BaseResponse[RankRequestSubmitResponse],
+)
+async def submit_rank_request(
+    ctx: RequiresAuth,
+    body: RankRequestSubmitRequest,
+) -> Response:
+    result = await beatmaps.submit_rank_request(ctx, ctx.session.user_id, body.url)
+    result = response.unwrap(result)
+
+    return response.create(RankRequestSubmitResponse(request_id=result))

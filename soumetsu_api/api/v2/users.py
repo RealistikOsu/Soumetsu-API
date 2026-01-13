@@ -455,20 +455,20 @@ class CommentResponse(BaseModel):
     author_username: str
     profile_id: int
     message: str
-    created_at: str
+    created_at: int
 
 
 @router.get(
     "/{user_id}/comments",
     response_model=response.BaseResponse[list[CommentResponse]],
 )
-async def get_user_comments(
+async def list_profile_comments(
     ctx: RequiresContext,
     user_id: int,
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await comments.get_user_comments(ctx, user_id, page, limit)
+    result = await comments.list_profile_comments(ctx, user_id, page, limit)
     result = response.unwrap(result)
 
     return response.create(

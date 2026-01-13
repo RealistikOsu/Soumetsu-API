@@ -25,7 +25,7 @@ class ServiceInterruptionException(Exception):
 
 def create(data: Any, *, status: int = status.HTTP_200_OK) -> Response:
 
-    model_json = BaseResponse(status=status, data=data).model_dump_json()
+    model_json = BaseResponse(status=status, data=data).model_dump_json(exclude_none=False)
     return Response(
         content=model_json,
         media_type="application/json",
