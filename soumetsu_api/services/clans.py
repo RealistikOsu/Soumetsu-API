@@ -35,9 +35,16 @@ class ClanError(ServiceError):
         match self:
             case ClanError.CLAN_NOT_FOUND | ClanError.USER_NOT_IN_CLAN:
                 return status.HTTP_404_NOT_FOUND
-            case ClanError.NOT_OWNER | ClanError.NOT_MEMBER | ClanError.CANNOT_KICK_OWNER:
+            case (
+                ClanError.NOT_OWNER | ClanError.NOT_MEMBER | ClanError.CANNOT_KICK_OWNER
+            ):
                 return status.HTTP_403_FORBIDDEN
-            case ClanError.ALREADY_IN_CLAN | ClanError.CLAN_FULL | ClanError.NAME_TAKEN | ClanError.TAG_TAKEN:
+            case (
+                ClanError.ALREADY_IN_CLAN
+                | ClanError.CLAN_FULL
+                | ClanError.NAME_TAKEN
+                | ClanError.TAG_TAKEN
+            ):
                 return status.HTTP_409_CONFLICT
             case ClanError.INVALID_INVITE:
                 return status.HTTP_400_BAD_REQUEST

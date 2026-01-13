@@ -164,7 +164,11 @@ async def get_user_most_played(
     offset = (page - 1) * limit
 
     beatmaps = await ctx.beatmaps.get_user_most_played(
-        user_id, mode, playstyle, limit, offset
+        user_id,
+        mode,
+        playstyle,
+        limit,
+        offset,
     )
 
     return [

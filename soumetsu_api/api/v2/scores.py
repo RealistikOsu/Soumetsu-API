@@ -6,11 +6,9 @@ from fastapi import Response
 from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
-from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import scores
-
 
 router = APIRouter()
 
@@ -73,7 +71,7 @@ async def get_score(
             accuracy=result.accuracy,
             pp=result.pp,
             playtime=result.playtime,
-        )
+        ),
     )
 
 

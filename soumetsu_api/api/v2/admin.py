@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from fastapi import Query
 from fastapi import Response
 from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.services import admin
-
 
 router = APIRouter(prefix="/admin")
 

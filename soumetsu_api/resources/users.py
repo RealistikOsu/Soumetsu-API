@@ -149,7 +149,7 @@ class UserRepository:
         )
         return [User(**row) for row in rows]
 
-    async def get_clan_info(self, user_id: int) -> "ClanInfo | None":
+    async def get_clan_info(self, user_id: int) -> ClanInfo | None:
         from soumetsu_api.services.users import ClanInfo
 
         row = await self._mysql.fetch_one(
@@ -185,7 +185,11 @@ class UserRepository:
 
         await self._mysql.execute(
             "UPDATE users SET username = :username, username_safe = :username_safe WHERE id = :id",
-            {"username": new_username, "username_safe": new_username_safe, "id": user_id},
+            {
+                "username": new_username,
+                "username_safe": new_username_safe,
+                "id": user_id,
+            },
         )
 
         for table in ("users_stats", "rx_stats", "ap_stats"):

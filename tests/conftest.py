@@ -35,7 +35,6 @@ _ensure_test_env()
 
 from soumetsu_api.adapters import mysql
 from soumetsu_api.adapters import redis
-from soumetsu_api.adapters.redis import RedisClient
 from soumetsu_api.services._common import AbstractContext
 
 

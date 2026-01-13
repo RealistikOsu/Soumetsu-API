@@ -19,7 +19,6 @@ from soumetsu_api.services import friends
 from soumetsu_api.services import user_history
 from soumetsu_api.services import users
 
-
 router = APIRouter(prefix="/users")
 
 
@@ -135,7 +134,7 @@ async def search_users(
                 privileges=u.privileges,
             )
             for u in result
-        ]
+        ],
     )
 
 
@@ -194,7 +193,7 @@ async def get_me(
                 level=result.stats.level,
                 first_places=result.stats.first_places,
             ),
-        )
+        ),
     )
 
 
@@ -210,7 +209,7 @@ async def get_settings(ctx: RequiresAuth) -> Response:
             prefer_relax=result.prefer_relax,
             play_style=result.play_style,
             show_country=result.show_country,
-        )
+        ),
     )
 
 
@@ -383,7 +382,7 @@ async def get_user_card(
             global_rank=result.global_rank,
             country_rank=result.country_rank,
             is_online=result.is_online,
-        )
+        ),
     )
 
 
@@ -432,12 +431,13 @@ async def get_user(
                 level=result.stats.level,
                 first_places=result.stats.first_places,
             ),
-        )
+        ),
     )
 
 
 @router.get(
-    "/{user_id}/userpage", response_model=response.BaseResponse[UserpageResponse]
+    "/{user_id}/userpage",
+    response_model=response.BaseResponse[UserpageResponse],
 )
 async def get_userpage(
     ctx: RequiresContext,
@@ -482,7 +482,7 @@ async def get_user_comments(
                 created_at=c.created_at,
             )
             for c in result
-        ]
+        ],
     )
 
 
@@ -506,7 +506,7 @@ async def get_user_followers(
         FollowerStatsResponse(
             follower_count=result.follower_count,
             friend_count=result.friend_count,
-        )
+        ),
     )
 
 
@@ -541,7 +541,7 @@ async def get_user_achievements(
                 achieved_at=a.achieved_at,
             )
             for a in result
-        ]
+        ],
     )
 
 
@@ -577,7 +577,7 @@ async def get_user_rank_history(
                 captured_at=h.captured_at,
             )
             for h in result
-        ]
+        ],
     )
 
 
@@ -601,7 +601,7 @@ async def get_user_pp_history(
                 captured_at=h.captured_at,
             )
             for h in result
-        ]
+        ],
     )
 
 
@@ -629,7 +629,12 @@ async def get_user_most_played(
     limit: int = Query(5, ge=1, le=50),
 ) -> Response:
     result = await beatmaps.get_user_most_played(
-        ctx, user_id, mode, playstyle, page, limit
+        ctx,
+        user_id,
+        mode,
+        playstyle,
+        page,
+        limit,
     )
     result = response.unwrap(result)
 
@@ -644,5 +649,5 @@ async def get_user_most_played(
                 playcount=mp.playcount,
             )
             for mp in result
-        ]
+        ],
     )

@@ -14,7 +14,6 @@ from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.adapters.redis import RedisClient
 from soumetsu_api.resources import AchievementsRepository
 from soumetsu_api.resources import AdminRepository
-from soumetsu_api.resources import UserHistoryRepository
 from soumetsu_api.resources import BadgesRepository
 from soumetsu_api.resources import BeatmapsRepository
 from soumetsu_api.resources import ClansRepository
@@ -24,6 +23,7 @@ from soumetsu_api.resources import FriendsRepository
 from soumetsu_api.resources import LeaderboardRepository
 from soumetsu_api.resources import ScoresRepository
 from soumetsu_api.resources import SessionRepository
+from soumetsu_api.resources import UserHistoryRepository
 from soumetsu_api.resources import UserRepository
 from soumetsu_api.resources import UserStatsRepository
 
@@ -37,8 +37,7 @@ class ServiceError(ABC, StrEnum, metaclass=_CombinedMeta):
     type OnSuccess[T] = T | Self
 
     @abstractmethod
-    def service(self) -> str:
-        ...
+    def service(self) -> str: ...
 
     def status_code(self) -> int:
         return status.HTTP_500_INTERNAL_SERVER_ERROR

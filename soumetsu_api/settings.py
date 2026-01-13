@@ -28,8 +28,12 @@ CORS_ALLOWED_ORIGINS: list[str] = [
 ]
 
 # Session configuration
-SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", 60 * 60 * 24 * 30))  # 30 days
-SESSION_SLIDING_WINDOW = os.environ.get("SESSION_SLIDING_WINDOW", "true").lower() == "true"
+SESSION_TTL_SECONDS = int(
+    os.environ.get("SESSION_TTL_SECONDS", 60 * 60 * 24 * 30),
+)  # 30 days
+SESSION_SLIDING_WINDOW = (
+    os.environ.get("SESSION_SLIDING_WINDOW", "true").lower() == "true"
+)
 
 # hCaptcha (bot protection)
 HCAPTCHA_SECRET_KEY = os.environ.get("HCAPTCHA_SECRET_KEY", "")

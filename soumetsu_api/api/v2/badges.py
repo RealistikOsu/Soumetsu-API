@@ -9,7 +9,6 @@ from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import badges
 
-
 router = APIRouter(prefix="/badges")
 
 
@@ -34,10 +33,9 @@ async def get_badges(
     result = await badges.get_badges(ctx, page, limit)
     result = response.unwrap(result)
 
-    return response.create([
-        BadgeResponse(id=b.id, name=b.name, icon=b.icon)
-        for b in result
-    ])
+    return response.create(
+        [BadgeResponse(id=b.id, name=b.name, icon=b.icon) for b in result],
+    )
 
 
 @router.get("/{badge_id}", response_model=response.BaseResponse[BadgeResponse])
@@ -48,11 +46,13 @@ async def get_badge(
     result = await badges.get_badge(ctx, badge_id)
     result = response.unwrap(result)
 
-    return response.create(BadgeResponse(
-        id=result.id,
-        name=result.name,
-        icon=result.icon,
-    ))
+    return response.create(
+        BadgeResponse(
+            id=result.id,
+            name=result.name,
+            icon=result.icon,
+        ),
+    )
 
 
 @router.get(
@@ -68,11 +68,13 @@ async def get_badge_members(
     result = await badges.get_badge_members(ctx, badge_id, page, limit)
     result = response.unwrap(result)
 
-    return response.create([
-        BadgeMemberResponse(
-            user_id=m.user_id,
-            username=m.username,
-            country=m.country,
-        )
-        for m in result
-    ])
+    return response.create(
+        [
+            BadgeMemberResponse(
+                user_id=m.user_id,
+                username=m.username,
+                country=m.country,
+            )
+            for m in result
+        ],
+    )

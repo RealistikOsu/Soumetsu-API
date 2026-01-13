@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 
-
 CLAN_PERM_MEMBER = 1
 CLAN_PERM_OWNER = 2
 

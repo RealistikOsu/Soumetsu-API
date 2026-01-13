@@ -64,7 +64,7 @@ async def get_user_achievements(
                 file=ach.file,
                 achieved=achieved,
                 achieved_at=user_ach_map.get(ach.id),
-            )
+            ),
         )
 
     return results

@@ -77,6 +77,7 @@ class AdminRepository:
 
         if username is not None:
             from soumetsu_api.utilities.validation import safe_username
+
             updates.append("username = :username")
             updates.append("username_safe = :username_safe")
             params["username"] = username

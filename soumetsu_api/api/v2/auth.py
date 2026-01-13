@@ -13,7 +13,6 @@ from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import auth
 from soumetsu_api.services.auth import AuthError
 
-
 router = APIRouter(prefix="/auth")
 
 
@@ -82,7 +81,7 @@ async def login(
             user_id=result.user_id,
             username=result.username,
             privileges=result.privileges,
-        )
+        ),
     )
 
 
@@ -122,7 +121,7 @@ async def register(
         RegisterResponse(
             user_id=result.user_id,
             username=result.username,
-        )
+        ),
     )
 
 
@@ -134,7 +133,7 @@ async def get_session(ctx: RequiresAuth) -> Response:
             privileges=ctx.session.privileges,
             created_at=ctx.session.created_at,
             expires_at=ctx.session.expires_at,
-        )
+        ),
     )
 
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from . import achievements
 from . import admin
-from . import user_history
 from . import badges
 from . import beatmaps
 from . import clans
@@ -12,11 +11,11 @@ from . import friends
 from . import leaderboard
 from . import scores
 from . import sessions
+from . import user_history
 from . import user_stats
 from . import users
 from .achievements import AchievementsRepository
 from .admin import AdminRepository
-from .user_history import UserHistoryRepository
 from .badges import BadgesRepository
 from .beatmaps import BeatmapsRepository
 from .clans import ClansRepository
@@ -28,6 +27,7 @@ from .leaderboard import LeaderboardRepository
 from .scores import ScoresRepository
 from .sessions import SessionData
 from .sessions import SessionRepository
+from .user_history import UserHistoryRepository
 from .user_stats import UserStatsRepository
 from .users import User
 from .users import UserForLogin

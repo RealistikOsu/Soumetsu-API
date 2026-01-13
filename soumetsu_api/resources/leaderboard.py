@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 
-
 STATS_TABLES = ["users_stats", "rx_stats", "ap_stats"]
 MODE_SUFFIXES = ["std", "taiko", "ctb", "mania"]
 

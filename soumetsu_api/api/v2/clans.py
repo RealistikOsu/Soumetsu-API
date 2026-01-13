@@ -11,7 +11,6 @@ from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import clans
 
-
 router = APIRouter(prefix="/clans")
 
 

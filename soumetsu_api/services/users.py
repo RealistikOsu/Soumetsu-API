@@ -37,7 +37,12 @@ class UserError(ServiceError):
                 return status.HTTP_403_FORBIDDEN
             case UserError.USERNAME_TAKEN | UserError.USERNAME_RESERVED:
                 return status.HTTP_409_CONFLICT
-            case UserError.INVALID_PLAYSTYLE | UserError.INVALID_MODE | UserError.INVALID_PASSWORD | UserError.WEAK_PASSWORD:
+            case (
+                UserError.INVALID_PLAYSTYLE
+                | UserError.INVALID_MODE
+                | UserError.INVALID_PASSWORD
+                | UserError.WEAK_PASSWORD
+            ):
                 return status.HTTP_400_BAD_REQUEST
             case _:
                 return status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -124,7 +129,10 @@ async def get_card(
     # Only fetch rank data, not full stats
     global_rank = await ctx.user_stats.get_global_rank(user_id, mode, playstyle)
     country_rank = await ctx.user_stats.get_country_rank(
-        user_id, mode, playstyle, user.country
+        user_id,
+        mode,
+        playstyle,
+        user.country,
     )
 
     return UserCard(
@@ -161,7 +169,10 @@ async def get_profile(
     stats = await ctx.user_stats.get_stats(user_id, mode, playstyle)
     global_rank = await ctx.user_stats.get_global_rank(user_id, mode, playstyle)
     country_rank = await ctx.user_stats.get_country_rank(
-        user_id, mode, playstyle, user.country
+        user_id,
+        mode,
+        playstyle,
+        user.country,
     )
     first_places = await ctx.user_stats.get_first_place_count(user_id, mode, playstyle)
 

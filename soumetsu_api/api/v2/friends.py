@@ -10,7 +10,6 @@ from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.services import friends
 
-
 router = APIRouter(prefix="/users/me/friends")
 
 
@@ -50,7 +49,10 @@ async def get_friends(
     return response.create([_to_response(f) for f in result])
 
 
-@router.get("/relationships", response_model=response.BaseResponse[RelationshipsResponse])
+@router.get(
+    "/relationships",
+    response_model=response.BaseResponse[RelationshipsResponse],
+)
 async def get_relationships(
     ctx: RequiresAuth,
     page: int = Query(1, ge=1),
@@ -64,7 +66,7 @@ async def get_relationships(
             friends=[_to_response(f) for f in result.friends],
             followers=[_to_response(f) for f in result.followers],
             mutual=result.mutual,
-        )
+        ),
     )
 
 

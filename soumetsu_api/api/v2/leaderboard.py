@@ -9,7 +9,6 @@ from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import leaderboard
 
-
 router = APIRouter(prefix="/leaderboard")
 
 

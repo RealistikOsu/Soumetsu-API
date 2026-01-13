@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 
-
 SCORE_TABLES = ["scores", "scores_relax", "scores_ap"]
 
 
@@ -76,7 +75,12 @@ class ScoresRepository:
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
         table = self._get_table(playstyle)
-        diff_col = ["difficulty_std", "difficulty_taiko", "difficulty_ctb", "difficulty_mania"][mode]
+        diff_col = [
+            "difficulty_std",
+            "difficulty_taiko",
+            "difficulty_ctb",
+            "difficulty_mania",
+        ][mode]
 
         query = f"""
             SELECT s.id, s.beatmap_md5, s.userid as user_id, s.score,
@@ -109,7 +113,12 @@ class ScoresRepository:
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
         table = self._get_table(playstyle)
-        diff_col = ["difficulty_std", "difficulty_taiko", "difficulty_ctb", "difficulty_mania"][mode]
+        diff_col = [
+            "difficulty_std",
+            "difficulty_taiko",
+            "difficulty_ctb",
+            "difficulty_mania",
+        ][mode]
 
         query = f"""
             SELECT s.id, s.beatmap_md5, s.userid as user_id, s.score,
@@ -140,7 +149,12 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        diff_col = ["difficulty_std", "difficulty_taiko", "difficulty_ctb", "difficulty_mania"][mode]
+        diff_col = [
+            "difficulty_std",
+            "difficulty_taiko",
+            "difficulty_ctb",
+            "difficulty_mania",
+        ][mode]
 
         query = f"""
             SELECT f.score_id as id, f.beatmap_md5, f.user_id, f.score,
@@ -160,7 +174,13 @@ class ScoresRepository:
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"user_id": user_id, "mode": mode, "relax": playstyle, "limit": limit, "offset": offset},
+            {
+                "user_id": user_id,
+                "mode": mode,
+                "relax": playstyle,
+                "limit": limit,
+                "offset": offset,
+            },
         )
         return [ScoreWithBeatmap(**row) for row in rows]
 
@@ -173,7 +193,12 @@ class ScoresRepository:
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
         table = self._get_table(playstyle)
-        diff_col = ["difficulty_std", "difficulty_taiko", "difficulty_ctb", "difficulty_mania"][mode]
+        diff_col = [
+            "difficulty_std",
+            "difficulty_taiko",
+            "difficulty_ctb",
+            "difficulty_mania",
+        ][mode]
 
         query = f"""
             SELECT s.id, s.beatmap_md5, s.userid as user_id, s.score,
@@ -206,11 +231,16 @@ class ScoresRepository:
 
     async def pin_score(self, user_id: int, score_id: int) -> None:
         import time
+
         await self._mysql.execute(
             """INSERT INTO user_pinned (userid, scoreid, pin_date)
                VALUES (:user_id, :score_id, :pin_date)
                ON DUPLICATE KEY UPDATE pin_date = :pin_date""",
-            {"user_id": user_id, "score_id": score_id, "pin_date": str(int(time.time()))},
+            {
+                "user_id": user_id,
+                "score_id": score_id,
+                "pin_date": str(int(time.time())),
+            },
         )
 
     async def unpin_score(self, user_id: int, score_id: int) -> None:
@@ -245,6 +275,11 @@ class ScoresRepository:
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"beatmap_md5": beatmap_md5, "mode": mode, "limit": limit, "offset": offset},
+            {
+                "beatmap_md5": beatmap_md5,
+                "mode": mode,
+                "limit": limit,
+                "offset": offset,
+            },
         )
         return [ScoreData(**row) for row in rows]

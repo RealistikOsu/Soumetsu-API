@@ -8,8 +8,6 @@ from pydantic import BaseModel
 from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import beatmaps
-from soumetsu_api.services import scores as scores_svc
-
 
 router = APIRouter(prefix="/beatmaps")
 
@@ -168,7 +166,11 @@ async def get_beatmap_scores(
     offset = (page - 1) * limit
 
     scores = await ctx.scores.get_beatmap_scores(
-        beatmap.beatmap_md5, mode, playstyle, limit, offset
+        beatmap.beatmap_md5,
+        mode,
+        playstyle,
+        limit,
+        offset,
     )
 
     return response.create(
@@ -195,5 +197,5 @@ async def get_beatmap_scores(
                 playtime=s.playtime,
             )
             for s in scores
-        ]
+        ],
     )

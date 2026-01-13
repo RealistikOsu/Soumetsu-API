@@ -65,10 +65,7 @@ async def get_badges(
 
     badges = await ctx.badges.get_all(limit, offset)
 
-    return [
-        BadgeResult(id=b.id, name=b.name, icon=b.icon)
-        for b in badges
-    ]
+    return [BadgeResult(id=b.id, name=b.name, icon=b.icon) for b in badges]
 
 
 async def get_badge_members(

@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 
-
 MODE_SUFFIXES = ["std", "taiko", "ctb", "mania"]
 STATS_TABLES = ["users_stats", "rx_stats", "ap_stats"]
 
@@ -141,7 +140,8 @@ class UserStatsRepository:
             AND u.privileges & 1 = 1
         """
         result = await self._mysql.fetch_val(
-            query, {"user_id": user_id, "country": country}
+            query,
+            {"user_id": user_id, "country": country},
         )
         return result or 0
 
@@ -158,7 +158,8 @@ class UserStatsRepository:
             AND relax = :relax
         """
         result = await self._mysql.fetch_val(
-            query, {"user_id": user_id, "mode": mode, "relax": playstyle}
+            query,
+            {"user_id": user_id, "mode": mode, "relax": playstyle},
         )
         return result or 0
 
