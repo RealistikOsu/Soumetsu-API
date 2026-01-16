@@ -15,6 +15,7 @@ from soumetsu_api.utilities import privileges
 class ScoreError(ServiceError):
     SCORE_NOT_FOUND = "score_not_found"
     USER_NOT_FOUND = "user_not_found"
+    USER_RESTRICTED = "user_restricted"
     FORBIDDEN = "forbidden"
     ALREADY_PINNED = "already_pinned"
     NOT_PINNED = "not_pinned"
@@ -29,7 +30,11 @@ class ScoreError(ServiceError):
         match self:
             case ScoreError.SCORE_NOT_FOUND | ScoreError.USER_NOT_FOUND:
                 return status.HTTP_404_NOT_FOUND
-            case ScoreError.FORBIDDEN | ScoreError.NOT_YOUR_SCORE:
+            case (
+                ScoreError.USER_RESTRICTED
+                | ScoreError.FORBIDDEN
+                | ScoreError.NOT_YOUR_SCORE
+            ):
                 return status.HTTP_403_FORBIDDEN
             case ScoreError.ALREADY_PINNED | ScoreError.NOT_PINNED:
                 return status.HTTP_409_CONFLICT
@@ -148,7 +153,7 @@ async def get_player_best(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return ScoreError.USER_NOT_FOUND
+        return ScoreError.USER_RESTRICTED
 
     if limit > 100:
         limit = 100
@@ -178,7 +183,7 @@ async def get_player_recent(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return ScoreError.USER_NOT_FOUND
+        return ScoreError.USER_RESTRICTED
 
     if limit > 100:
         limit = 100
@@ -208,7 +213,7 @@ async def get_player_firsts(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return ScoreError.USER_NOT_FOUND
+        return ScoreError.USER_RESTRICTED
 
     if limit > 100:
         limit = 100
@@ -238,7 +243,7 @@ async def get_player_pinned(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return ScoreError.USER_NOT_FOUND
+        return ScoreError.USER_RESTRICTED
 
     if limit > 100:
         limit = 100

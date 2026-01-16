@@ -15,6 +15,7 @@ from soumetsu_api.utilities import privileges
 class CommentError(ServiceError):
     COMMENT_NOT_FOUND = "comment_not_found"
     USER_NOT_FOUND = "user_not_found"
+    USER_RESTRICTED = "user_restricted"
     FORBIDDEN = "forbidden"
     COMMENTS_DISABLED = "comments_disabled"
 
@@ -27,7 +28,11 @@ class CommentError(ServiceError):
         match self:
             case CommentError.COMMENT_NOT_FOUND | CommentError.USER_NOT_FOUND:
                 return status.HTTP_404_NOT_FOUND
-            case CommentError.FORBIDDEN | CommentError.COMMENTS_DISABLED:
+            case (
+                CommentError.USER_RESTRICTED
+                | CommentError.FORBIDDEN
+                | CommentError.COMMENTS_DISABLED
+            ):
                 return status.HTTP_403_FORBIDDEN
             case _:
                 return status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -77,7 +82,7 @@ async def list_profile_comments(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return CommentError.USER_NOT_FOUND
+        return CommentError.USER_RESTRICTED
 
     if limit > 100:
         limit = 100
@@ -99,7 +104,7 @@ async def create_comment(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return CommentError.USER_NOT_FOUND
+        return CommentError.USER_RESTRICTED
 
     created_at = str(int(time.time()))
     comment_id = await ctx.comments.create(

@@ -3,9 +3,11 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.adapters.redis import RedisClient
+from soumetsu_api.constants import get_mode_suffix
+from soumetsu_api.constants import get_stats_table
 
-STATS_TABLES = ["users_stats", "rx_stats", "ap_stats"]
-MODE_SUFFIXES = ["std", "taiko", "ctb", "mania"]
+LEADERBOARD_KEY_PREFIX = "leaderboard"
 
 
 class LeaderboardModeStats(BaseModel):
@@ -21,7 +23,8 @@ class LeaderboardEntry(BaseModel):
     country: str
     privileges: int
     chosen_mode: LeaderboardModeStats
-    rank: int
+    global_rank: int
+    country_rank: int
 
 
 class FirstPlaceEntry(BaseModel):
@@ -35,54 +38,64 @@ class FirstPlaceEntry(BaseModel):
     mode: int
 
 
-class LeaderboardRepository:
-    __slots__ = ("_mysql",)
+def _build_leaderboard_key(
+    playstyle: int,
+    mode: int,
+    country: str | None = None,
+) -> str:
+    suffix = get_mode_suffix(mode)
+    playstyle_names = {0: "vanilla", 1: "relax", 2: "autopilot"}
+    playstyle_name = playstyle_names.get(playstyle, "vanilla")
 
-    def __init__(self, mysql: ImplementsMySQL) -> None:
-        self._mysql = mysql
+    if country:
+        return f"{LEADERBOARD_KEY_PREFIX}:{playstyle_name}:{suffix}:{country.lower()}"
+    return f"{LEADERBOARD_KEY_PREFIX}:{playstyle_name}:{suffix}"
 
-    def _get_table(self, playstyle: int) -> str:
-        return STATS_TABLES[playstyle]
 
-    def _get_mode_suffix(self, mode: int) -> str:
-        return MODE_SUFFIXES[mode]
+def _calculate_level(total_score: int) -> float:
+    if total_score <= 0:
+        return 1.0
 
-    def _calculate_level(self, total_score: int) -> float:
-        if total_score <= 0:
-            return 1.0
+    level = 1
+    score_req = 0
 
-        level = 1
-        score_req = 0
+    while score_req <= total_score:
+        level += 1
+        if level <= 100:
+            score_req += (
+                5000 // 3 * (4 * (level**3) - 3 * (level**2) - level)
+                + 1250 * (1.8 ** (level - 60)) // 3
+            )
+        else:
+            score_req += 26931190829 + 100000000000 * (level - 100)
 
-        while score_req <= total_score:
-            level += 1
-            if level <= 100:
-                score_req += (
-                    5000 // 3 * (4 * (level**3) - 3 * (level**2) - level)
-                    + 1250 * (1.8 ** (level - 60)) // 3
+        if level > 120:
+            break
+
+    progress = 0.0
+    if level > 1:
+        prev_req = 0
+        for lv in range(2, level):
+            if lv <= 100:
+                prev_req += (
+                    5000 // 3 * (4 * (lv**3) - 3 * (lv**2) - lv)
+                    + 1250 * (1.8 ** (lv - 60)) // 3
                 )
             else:
-                score_req += 26931190829 + 100000000000 * (level - 100)
+                prev_req += 26931190829 + 100000000000 * (lv - 100)
 
-            if level > 120:
-                break
+        if score_req > prev_req:
+            progress = (total_score - prev_req) / (score_req - prev_req)
 
-        progress = 0.0
-        if level > 1:
-            prev_req = 0
-            for l in range(2, level):
-                if l <= 100:
-                    prev_req += (
-                        5000 // 3 * (4 * (l**3) - 3 * (l**2) - l)
-                        + 1250 * (1.8 ** (l - 60)) // 3
-                    )
-                else:
-                    prev_req += 26931190829 + 100000000000 * (l - 100)
+    return float(level - 1) + progress
 
-            if score_req > prev_req:
-                progress = (total_score - prev_req) / (score_req - prev_req)
 
-        return float(level - 1) + progress
+class LeaderboardRepository:
+    __slots__ = ("_mysql", "_redis")
+
+    def __init__(self, mysql: ImplementsMySQL, redis: RedisClient) -> None:
+        self._mysql = mysql
+        self._redis = redis
 
     async def get_global(
         self,
@@ -91,43 +104,18 @@ class LeaderboardRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[LeaderboardEntry]:
-        table = self._get_table(playstyle)
-        suffix = self._get_mode_suffix(mode)
+        key = _build_leaderboard_key(playstyle, mode)
+        user_ids = await self._redis.zrevrange(key, offset, offset + limit - 1)
 
-        query = f"""
-            SELECT s.id, u.username, u.country, u.privileges,
-                   s.pp_{suffix} as pp,
-                   s.avg_accuracy_{suffix} as accuracy,
-                   s.playcount_{suffix} as playcount,
-                   s.total_score_{suffix} as total_score
-            FROM {table} s
-            INNER JOIN users u ON s.id = u.id
-            WHERE u.privileges & 1 = 1
-            AND s.pp_{suffix} > 0
-            ORDER BY s.pp_{suffix} DESC
-            LIMIT :limit OFFSET :offset
-        """
-        rows = await self._mysql.fetch_all(
-            query,
-            {"limit": limit, "offset": offset},
+        if not user_ids:
+            return []
+
+        return await self._fetch_users_with_ranks(
+            user_ids,
+            mode,
+            playstyle,
+            offset,
         )
-
-        return [
-            LeaderboardEntry(
-                id=row["id"],
-                username=row["username"],
-                country=row["country"],
-                privileges=row["privileges"],
-                chosen_mode=LeaderboardModeStats(
-                    pp=row["pp"],
-                    accuracy=row["accuracy"],
-                    playcount=row["playcount"],
-                    level=self._calculate_level(row["total_score"] or 0),
-                ),
-                rank=offset + i + 1,
-            )
-            for i, row in enumerate(rows)
-        ]
 
     async def get_country(
         self,
@@ -137,8 +125,70 @@ class LeaderboardRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[LeaderboardEntry]:
-        table = self._get_table(playstyle)
-        suffix = self._get_mode_suffix(mode)
+        key = _build_leaderboard_key(playstyle, mode, country)
+        user_ids = await self._redis.zrevrange(key, offset, offset + limit - 1)
+
+        if not user_ids:
+            return []
+
+        return await self._fetch_users_with_ranks(
+            user_ids,
+            mode,
+            playstyle,
+            offset,
+            country=country,
+        )
+
+    async def get_user_global_rank(
+        self,
+        user_id: int,
+        mode: int,
+        playstyle: int,
+    ) -> int:
+        key = _build_leaderboard_key(playstyle, mode)
+        rank = await self._redis.zrevrank(key, str(user_id))
+        if rank is None:
+            return 0
+        return rank + 1
+
+    async def get_user_country_rank(
+        self,
+        user_id: int,
+        mode: int,
+        playstyle: int,
+        country: str,
+    ) -> int:
+        key = _build_leaderboard_key(playstyle, mode, country)
+        rank = await self._redis.zrevrank(key, str(user_id))
+        if rank is None:
+            return 0
+        return rank + 1
+
+    async def get_user_pp(
+        self,
+        user_id: int,
+        mode: int,
+        playstyle: int,
+    ) -> float | None:
+        key = _build_leaderboard_key(playstyle, mode)
+        return await self._redis.zscore(key, str(user_id))
+
+    async def _fetch_users_with_ranks(
+        self,
+        user_ids: list[str],
+        mode: int,
+        playstyle: int,
+        base_offset: int,
+        country: str | None = None,
+    ) -> list[LeaderboardEntry]:
+        if not user_ids:
+            return []
+
+        table = get_stats_table(playstyle)
+        suffix = get_mode_suffix(mode)
+
+        placeholders = ", ".join(f":id_{i}" for i in range(len(user_ids)))
+        params = {f"id_{i}": int(uid) for i, uid in enumerate(user_ids)}
 
         query = f"""
             SELECT s.id, u.username, u.country, u.privileges,
@@ -148,52 +198,44 @@ class LeaderboardRepository:
                    s.total_score_{suffix} as total_score
             FROM {table} s
             INNER JOIN users u ON s.id = u.id
-            WHERE u.privileges & 1 = 1
-            AND u.country = :country
-            AND s.pp_{suffix} > 0
-            ORDER BY s.pp_{suffix} DESC
-            LIMIT :limit OFFSET :offset
+            WHERE s.id IN ({placeholders})
         """
-        rows = await self._mysql.fetch_all(
-            query,
-            {"country": country.upper(), "limit": limit, "offset": offset},
-        )
 
-        return [
-            LeaderboardEntry(
-                id=row["id"],
-                username=row["username"],
-                country=row["country"],
-                privileges=row["privileges"],
-                chosen_mode=LeaderboardModeStats(
-                    pp=row["pp"],
-                    accuracy=row["accuracy"],
-                    playcount=row["playcount"],
-                    level=self._calculate_level(row["total_score"] or 0),
-                ),
-                rank=offset + i + 1,
+        rows = await self._mysql.fetch_all(query, params)
+        user_data = {row["id"]: row for row in rows}
+
+        entries = []
+        for i, uid_str in enumerate(user_ids):
+            uid = int(uid_str)
+            row = user_data.get(uid)
+            if not row:
+                continue
+
+            country_rank = await self.get_user_country_rank(
+                uid,
+                mode,
+                playstyle,
+                row["country"],
             )
-            for i, row in enumerate(rows)
-        ]
 
-    async def get_rank_for_pp(
-        self,
-        pp: int,
-        mode: int,
-        playstyle: int,
-    ) -> int:
-        table = self._get_table(playstyle)
-        suffix = self._get_mode_suffix(mode)
+            entries.append(
+                LeaderboardEntry(
+                    id=row["id"],
+                    username=row["username"],
+                    country=row["country"],
+                    privileges=row["privileges"],
+                    chosen_mode=LeaderboardModeStats(
+                        pp=row["pp"] or 0,
+                        accuracy=row["accuracy"] or 0.0,
+                        playcount=row["playcount"] or 0,
+                        level=_calculate_level(row["total_score"] or 0),
+                    ),
+                    global_rank=base_offset + i + 1,
+                    country_rank=country_rank,
+                ),
+            )
 
-        query = f"""
-            SELECT COUNT(*) + 1 as `rank`
-            FROM {table} s
-            INNER JOIN users u ON s.id = u.id
-            WHERE u.privileges & 1 = 1
-            AND s.pp_{suffix} > :pp
-        """
-        result = await self._mysql.fetch_val(query, {"pp": pp})
-        return result or 1
+        return entries
 
     async def list_oldest_firsts(
         self,
@@ -220,3 +262,20 @@ class LeaderboardRepository:
         )
 
         return [FirstPlaceEntry(**row) for row in rows]
+
+    async def get_total_ranked_users(
+        self,
+        mode: int,
+        playstyle: int,
+    ) -> int:
+        key = _build_leaderboard_key(playstyle, mode)
+        return await self._redis.zcard(key)
+
+    async def get_country_total_ranked_users(
+        self,
+        mode: int,
+        playstyle: int,
+        country: str,
+    ) -> int:
+        key = _build_leaderboard_key(playstyle, mode, country)
+        return await self._redis.zcard(key)

@@ -9,6 +9,7 @@ from soumetsu_api.adapters.redis import RedisClient
 from soumetsu_api.utilities import crypto
 
 SESSION_KEY_PREFIX = "session:"
+USER_SESSIONS_PREFIX = "user_sessions:"
 
 
 @dataclass
@@ -44,12 +45,19 @@ class SessionRepository:
             ip_address=ip_address,
         )
 
-        key = f"{SESSION_KEY_PREFIX}{token_hash}"
-        await self._redis.set(
-            key,
+        session_key = f"{SESSION_KEY_PREFIX}{token_hash}"
+        user_sessions_key = f"{USER_SESSIONS_PREFIX}{user_id}"
+
+        # Use pipeline for atomic operations
+        pipe = self._redis.pipeline()
+        pipe.set(
+            session_key,
             json.dumps(session.__dict__),
             ex=settings.SESSION_TTL_SECONDS,
         )
+        pipe.sadd(user_sessions_key, token_hash)
+        pipe.expire(user_sessions_key, settings.SESSION_TTL_SECONDS)
+        await pipe.execute()
 
         return token
 
@@ -80,20 +88,35 @@ class SessionRepository:
 
     async def delete(self, token: str) -> bool:
         token_hash = crypto.hash_token_sha256(token)
-        key = f"{SESSION_KEY_PREFIX}{token_hash}"
-        result = await self._redis.delete(key)
+        session_key = f"{SESSION_KEY_PREFIX}{token_hash}"
+
+        # Get session to find user_id for index cleanup
+        data = await self._redis.get(session_key)
+        if data:
+            session_dict = json.loads(data)
+            user_id = session_dict.get("user_id")
+            if user_id:
+                user_sessions_key = f"{USER_SESSIONS_PREFIX}{user_id}"
+                await self._redis.srem(user_sessions_key, token_hash)
+
+        result = await self._redis.delete(session_key)
         return result > 0
 
     async def delete_all_for_user(self, user_id: int) -> int:
-        pattern = f"{SESSION_KEY_PREFIX}*"
-        deleted = 0
+        user_sessions_key = f"{USER_SESSIONS_PREFIX}{user_id}"
+        token_hashes = await self._redis.smembers(user_sessions_key)
 
-        async for key in self._redis.scan_iter(match=pattern):
-            data = await self._redis.get(key)
-            if data:
-                session_dict = json.loads(data)
-                if session_dict.get("user_id") == user_id:
-                    await self._redis.delete(key)
-                    deleted += 1
+        if not token_hashes:
+            return 0
 
-        return deleted
+        # Build list of session keys to delete
+        session_keys = [f"{SESSION_KEY_PREFIX}{th}" for th in token_hashes]
+
+        # Delete all sessions and the index in one pipeline
+        pipe = self._redis.pipeline()
+        for key in session_keys:
+            pipe.delete(key)
+        pipe.delete(user_sessions_key)
+        await pipe.execute()
+
+        return len(token_hashes)

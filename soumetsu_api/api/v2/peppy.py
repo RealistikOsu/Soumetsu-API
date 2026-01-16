@@ -253,7 +253,7 @@ async def get_user(
         return Response(content="[]", media_type="application/json")
 
     stats = await ctx.user_stats.get_stats(user.id, mode, 0)
-    global_rank = await ctx.user_stats.get_global_rank(user.id, mode, 0)
+    global_rank = await ctx.leaderboard.get_user_global_rank(user.id, mode, 0)
 
     result = [
         PeppyUserResponse(

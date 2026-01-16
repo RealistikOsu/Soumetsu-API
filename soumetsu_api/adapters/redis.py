@@ -7,6 +7,7 @@ from typing import Self
 
 from redis.asyncio import Redis
 
+from soumetsu_api import settings
 from soumetsu_api.utilities import logging
 
 type PubSubHandler = Callable[[str], Coroutine[None, None, None]]
@@ -206,9 +207,6 @@ def default() -> RedisClient:
     Note:
         The connection still has to be initialised by calling `initialise()` on the returned instance.
     """
-
-    from soumetsu_api import settings
-
     return RedisClient(
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,

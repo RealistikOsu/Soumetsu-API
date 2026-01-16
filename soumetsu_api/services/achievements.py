@@ -12,6 +12,7 @@ from soumetsu_api.utilities import privileges
 
 class AchievementError(ServiceError):
     USER_NOT_FOUND = "user_not_found"
+    USER_RESTRICTED = "user_restricted"
 
     @override
     def service(self) -> str:
@@ -22,6 +23,8 @@ class AchievementError(ServiceError):
         match self:
             case AchievementError.USER_NOT_FOUND:
                 return status.HTTP_404_NOT_FOUND
+            case AchievementError.USER_RESTRICTED:
+                return status.HTTP_403_FORBIDDEN
             case _:
                 return status.HTTP_500_INTERNAL_SERVER_ERROR
 
@@ -46,7 +49,7 @@ async def get_user_achievements(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return AchievementError.USER_NOT_FOUND
+        return AchievementError.USER_RESTRICTED
 
     all_achievements = await ctx.achievements.get_all()
     user_achievements = await ctx.achievements.get_user_achievements(user_id)

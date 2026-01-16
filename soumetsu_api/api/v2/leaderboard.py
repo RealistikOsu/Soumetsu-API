@@ -25,7 +25,8 @@ class LeaderboardEntryResponse(BaseModel):
     country: str
     privileges: int
     chosen_mode: LeaderboardModeStatsResponse
-    rank: int
+    global_rank: int
+    country_rank: int
 
 
 class FirstPlaceResponse(BaseModel):
@@ -43,6 +44,10 @@ class RankResponse(BaseModel):
     rank: int
 
 
+class TotalUsersResponse(BaseModel):
+    total: int
+
+
 def _to_response(
     e: leaderboard.LeaderboardEntryResult,
 ) -> LeaderboardEntryResponse:
@@ -57,7 +62,8 @@ def _to_response(
             playcount=e.chosen_mode.playcount,
             level=e.chosen_mode.level,
         ),
-        rank=e.rank,
+        global_rank=e.global_rank,
+        country_rank=e.country_rank,
     )
 
 
@@ -106,17 +112,29 @@ async def get_country(
     return response.create([_to_response(e) for e in result])
 
 
-@router.get("/rank", response_model=response.BaseResponse[RankResponse])
-async def get_rank_for_pp(
+@router.get("/rank/{user_id}", response_model=response.BaseResponse[RankResponse])
+async def get_user_rank(
     ctx: RequiresContext,
-    pp: int = Query(..., ge=0),
+    user_id: int,
     mode: int = Query(0, ge=0, le=3),
     playstyle: int = Query(0, ge=0, le=2),
 ) -> Response:
-    result = await leaderboard.get_rank_for_pp(ctx, pp, mode, playstyle)
+    result = await leaderboard.get_user_rank(ctx, user_id, mode, playstyle)
     result = response.unwrap(result)
 
     return response.create(RankResponse(rank=result))
+
+
+@router.get("/total", response_model=response.BaseResponse[TotalUsersResponse])
+async def get_total_ranked_users(
+    ctx: RequiresContext,
+    mode: int = Query(0, ge=0, le=3),
+    playstyle: int = Query(0, ge=0, le=2),
+) -> Response:
+    result = await leaderboard.get_total_ranked_users(ctx, mode, playstyle)
+    result = response.unwrap(result)
+
+    return response.create(TotalUsersResponse(total=result))
 
 
 @router.get(

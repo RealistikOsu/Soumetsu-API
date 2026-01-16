@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import override
 
 from fastapi import status
 
+from soumetsu_api.constants import is_valid_mode
+from soumetsu_api.constants import is_valid_playstyle
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
+from soumetsu_api.utilities import crypto
 from soumetsu_api.utilities import privileges
 
 
@@ -21,6 +25,9 @@ class UserError(ServiceError):
     NO_DISCORD_LINKED = "no_discord_linked"
     INVALID_PASSWORD = "invalid_password"
     WEAK_PASSWORD = "weak_password"
+    UPLOAD_FAILED = "upload_failed"
+    INVALID_FILE_FORMAT = "invalid_file_format"
+    FILE_TOO_LARGE = "file_too_large"
 
     @override
     def service(self) -> str:
@@ -31,17 +38,19 @@ class UserError(ServiceError):
         match self:
             case UserError.USER_NOT_FOUND | UserError.NO_DISCORD_LINKED:
                 return status.HTTP_404_NOT_FOUND
-            case UserError.USER_RESTRICTED:
-                return status.HTTP_403_FORBIDDEN
-            case UserError.FORBIDDEN:
+            case UserError.USER_RESTRICTED | UserError.FORBIDDEN:
                 return status.HTTP_403_FORBIDDEN
             case UserError.USERNAME_TAKEN | UserError.USERNAME_RESERVED:
                 return status.HTTP_409_CONFLICT
+            case UserError.FILE_TOO_LARGE:
+                return status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
             case (
                 UserError.INVALID_PLAYSTYLE
                 | UserError.INVALID_MODE
                 | UserError.INVALID_PASSWORD
                 | UserError.WEAK_PASSWORD
+                | UserError.INVALID_FILE_FORMAT
+                | UserError.UPLOAD_FAILED
             ):
                 return status.HTTP_400_BAD_REQUEST
             case _:
@@ -97,8 +106,6 @@ class UserCompact:
 
 @dataclass
 class UserCard:
-    """Minimal user info for hover cards - optimized for fast loading."""
-
     id: int
     username: str
     country: str
@@ -112,7 +119,6 @@ async def get_card(
     ctx: AbstractContext,
     user_id: int,
 ) -> UserError.OnSuccess[UserCard]:
-    """Get minimal user info for hover cards. Optimized for speed."""
     user = await ctx.users.find_by_id(user_id)
     if not user:
         return UserError.USER_NOT_FOUND
@@ -121,14 +127,12 @@ async def get_card(
     if privileges.is_restricted(user_privs):
         return UserError.USER_RESTRICTED
 
-    # Get settings to find preferred mode
     settings = await ctx.user_stats.get_settings(user_id)
     mode = settings.favourite_mode if settings else 0
     playstyle = settings.prefer_relax if settings else 0
 
-    # Only fetch rank data, not full stats
-    global_rank = await ctx.user_stats.get_global_rank(user_id, mode, playstyle)
-    country_rank = await ctx.user_stats.get_country_rank(
+    global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, playstyle)
+    country_rank = await ctx.leaderboard.get_user_country_rank(
         user_id,
         mode,
         playstyle,
@@ -152,10 +156,10 @@ async def get_profile(
     mode: int = 0,
     playstyle: int = 0,
 ) -> UserError.OnSuccess[UserProfile]:
-    if mode < 0 or mode > 3:
+    if not is_valid_mode(mode):
         return UserError.INVALID_MODE
 
-    if playstyle < 0 or playstyle > 2:
+    if not is_valid_playstyle(playstyle):
         return UserError.INVALID_PLAYSTYLE
 
     user = await ctx.users.find_by_id(user_id)
@@ -167,8 +171,8 @@ async def get_profile(
         return UserError.USER_RESTRICTED
 
     stats = await ctx.user_stats.get_stats(user_id, mode, playstyle)
-    global_rank = await ctx.user_stats.get_global_rank(user_id, mode, playstyle)
-    country_rank = await ctx.user_stats.get_country_rank(
+    global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, playstyle)
+    country_rank = await ctx.leaderboard.get_user_country_rank(
         user_id,
         mode,
         playstyle,
@@ -336,8 +340,6 @@ async def change_username(
     user_id: int,
     new_username: str,
 ) -> UserError.OnSuccess[None]:
-    import re
-
     if not re.match(r"^[\w \[\]-]{2,15}$", new_username):
         return UserError.USERNAME_RESERVED
 
@@ -386,8 +388,6 @@ async def change_password(
     new_password: str,
     new_email: str | None = None,
 ) -> UserError.OnSuccess[None]:
-    from soumetsu_api.utilities import crypto
-
     password_data = await ctx.users.get_password_hash(user_id)
     if not password_data:
         return UserError.USER_NOT_FOUND
@@ -411,4 +411,85 @@ async def change_password(
     if new_email:
         await ctx.users.update_email(user_id, new_email)
 
+    return None
+
+
+# Magic bytes for supported image formats
+ALLOWED_IMAGE_MAGIC = (
+    b"\x89PNG\r\n\x1a\n",  # PNG
+    b"\xff\xd8\xff",  # JPEG
+    b"GIF87a",  # GIF87a
+    b"GIF89a",  # GIF89a
+)
+
+MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
+MAX_BANNER_SIZE = 5 * 1024 * 1024  # 5MB
+
+
+def _validate_image_magic(data: bytes) -> bool:
+    """Check if image data starts with a valid magic byte sequence."""
+    return any(data.startswith(magic) for magic in ALLOWED_IMAGE_MAGIC)
+
+
+async def upload_avatar(
+    ctx: AbstractContext,
+    user_id: int,
+    image_data: bytes,
+) -> UserError.OnSuccess[str]:
+    """Save user avatar image. Returns path on success."""
+    if len(image_data) > MAX_AVATAR_SIZE:
+        return UserError.FILE_TOO_LARGE
+
+    if not _validate_image_magic(image_data):
+        return UserError.INVALID_FILE_FORMAT
+
+    from soumetsu_api.adapters import storage
+
+    path = await storage.save_avatar(user_id, image_data)
+    if not path:
+        return UserError.UPLOAD_FAILED
+
+    return path
+
+
+async def upload_banner(
+    ctx: AbstractContext,
+    user_id: int,
+    image_data: bytes,
+) -> UserError.OnSuccess[str]:
+    """Save user banner image. Returns path on success."""
+    if len(image_data) > MAX_BANNER_SIZE:
+        return UserError.FILE_TOO_LARGE
+
+    if not _validate_image_magic(image_data):
+        return UserError.INVALID_FILE_FORMAT
+
+    from soumetsu_api.adapters import storage
+
+    path = await storage.save_banner(user_id, image_data)
+    if not path:
+        return UserError.UPLOAD_FAILED
+
+    return path
+
+
+async def delete_avatar(
+    ctx: AbstractContext,
+    user_id: int,
+) -> UserError.OnSuccess[None]:
+    """Delete user avatar image."""
+    from soumetsu_api.adapters import storage
+
+    await storage.delete_avatar(user_id)
+    return None
+
+
+async def delete_banner(
+    ctx: AbstractContext,
+    user_id: int,
+) -> UserError.OnSuccess[None]:
+    """Delete user banner image."""
+    from soumetsu_api.adapters import storage
+
+    await storage.delete_banner(user_id)
     return None

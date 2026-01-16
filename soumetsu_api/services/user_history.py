@@ -13,6 +13,7 @@ from soumetsu_api.utilities import privileges
 
 class UserHistoryError(ServiceError):
     USER_NOT_FOUND = "user_not_found"
+    USER_RESTRICTED = "user_restricted"
     INVALID_TYPE = "invalid_type"
 
     @override
@@ -24,6 +25,8 @@ class UserHistoryError(ServiceError):
         match self:
             case UserHistoryError.USER_NOT_FOUND:
                 return status.HTTP_404_NOT_FOUND
+            case UserHistoryError.USER_RESTRICTED:
+                return status.HTTP_403_FORBIDDEN
             case UserHistoryError.INVALID_TYPE:
                 return status.HTTP_400_BAD_REQUEST
             case _:
@@ -60,7 +63,7 @@ async def get_rank_history(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return UserHistoryError.USER_NOT_FOUND
+        return UserHistoryError.USER_RESTRICTED
 
     # Mode combines mode and playstyle: mode + playstyle * 4
     combined_mode = mode + playstyle * 4
@@ -88,7 +91,7 @@ async def get_pp_history(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return UserHistoryError.USER_NOT_FOUND
+        return UserHistoryError.USER_RESTRICTED
 
     combined_mode = mode + playstyle * 4
     history = await ctx.user_history.get_history(user_id, combined_mode)

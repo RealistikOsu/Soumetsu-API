@@ -13,6 +13,7 @@ from soumetsu_api.utilities import privileges
 
 class FriendError(ServiceError):
     USER_NOT_FOUND = "user_not_found"
+    USER_RESTRICTED = "user_restricted"
     ALREADY_FRIENDS = "already_friends"
     NOT_FRIENDS = "not_friends"
     CANNOT_ADD_SELF = "cannot_add_self"
@@ -26,6 +27,8 @@ class FriendError(ServiceError):
         match self:
             case FriendError.USER_NOT_FOUND | FriendError.NOT_FRIENDS:
                 return status.HTTP_404_NOT_FOUND
+            case FriendError.USER_RESTRICTED:
+                return status.HTTP_403_FORBIDDEN
             case FriendError.ALREADY_FRIENDS:
                 return status.HTTP_409_CONFLICT
             case FriendError.CANNOT_ADD_SELF:
@@ -98,7 +101,7 @@ async def add_friend(
 
     user_privs = privileges.UserPrivileges(user.privileges)
     if privileges.is_restricted(user_privs):
-        return FriendError.USER_NOT_FOUND
+        return FriendError.USER_RESTRICTED
 
     if await ctx.friends.is_friend(user_id, friend_id):
         return FriendError.ALREADY_FRIENDS

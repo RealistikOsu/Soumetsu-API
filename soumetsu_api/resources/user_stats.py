@@ -3,9 +3,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
-
-MODE_SUFFIXES = ["std", "taiko", "ctb", "mania"]
-STATS_TABLES = ["users_stats", "rx_stats", "ap_stats"]
+from soumetsu_api.constants import get_mode_suffix
+from soumetsu_api.constants import get_stats_table
 
 
 class UserStatsData(BaseModel):
@@ -36,10 +35,10 @@ class UserStatsRepository:
         self._mysql = mysql
 
     def _get_table(self, playstyle: int) -> str:
-        return STATS_TABLES[playstyle]
+        return get_stats_table(playstyle)
 
     def _get_mode_suffix(self, mode: int) -> str:
-        return MODE_SUFFIXES[mode]
+        return get_mode_suffix(mode)
 
     async def initialise_all(self, user_id: int, username: str) -> None:
         await self._mysql.execute(
@@ -97,53 +96,6 @@ class UserStatsRepository:
             replays_watched=row["replays_watched"],
             level=row["level"],
         )
-
-    async def get_global_rank(
-        self,
-        user_id: int,
-        mode: int,
-        playstyle: int,
-    ) -> int:
-        table = self._get_table(playstyle)
-        suffix = self._get_mode_suffix(mode)
-
-        query = f"""
-            SELECT COUNT(*) + 1 as `rank`
-            FROM {table} s
-            INNER JOIN users u ON s.id = u.id
-            WHERE s.pp_{suffix} > (
-                SELECT pp_{suffix} FROM {table} WHERE id = :user_id
-            )
-            AND u.privileges & 1 = 1
-        """
-        result = await self._mysql.fetch_val(query, {"user_id": user_id})
-        return result or 0
-
-    async def get_country_rank(
-        self,
-        user_id: int,
-        mode: int,
-        playstyle: int,
-        country: str,
-    ) -> int:
-        table = self._get_table(playstyle)
-        suffix = self._get_mode_suffix(mode)
-
-        query = f"""
-            SELECT COUNT(*) + 1 as `rank`
-            FROM {table} s
-            INNER JOIN users u ON s.id = u.id
-            WHERE s.pp_{suffix} > (
-                SELECT pp_{suffix} FROM {table} WHERE id = :user_id
-            )
-            AND u.country = :country
-            AND u.privileges & 1 = 1
-        """
-        result = await self._mysql.fetch_val(
-            query,
-            {"user_id": user_id, "country": country},
-        )
-        return result or 0
 
     async def get_first_place_count(
         self,

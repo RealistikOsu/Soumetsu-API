@@ -89,7 +89,7 @@ class AbstractContext(ABC):
 
     @property
     def leaderboard(self) -> LeaderboardRepository:
-        return LeaderboardRepository(self._mysql)
+        return LeaderboardRepository(self._mysql, self._redis)
 
     @property
     def clans(self) -> ClansRepository:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import urllib.parse
 from abc import ABC
 from abc import abstractmethod
 from collections.abc import AsyncGenerator
@@ -14,6 +15,7 @@ from databases.core import Connection
 from databases.core import Transaction
 from databases.interfaces import Record
 
+from soumetsu_api import settings
 from soumetsu_api.utilities import logging
 
 type MySQLValue = Any
@@ -162,11 +164,6 @@ def default() -> ImplementsMySQL:
     Note:
         The connection still has to be initialised by calling `connect()` on the returned instance.
     """
-
-    import urllib.parse
-
-    from soumetsu_api import settings
-
     try:
         import asyncmy  # noqa: F401 # type: ignore[import]
 

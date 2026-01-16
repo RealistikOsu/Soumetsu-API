@@ -4,10 +4,8 @@ from fastapi import APIRouter
 from fastapi import Query
 from fastapi import Response
 from fastapi import UploadFile
-from fastapi import status
 from pydantic import BaseModel
 
-from soumetsu_api.adapters import storage
 from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
@@ -299,68 +297,39 @@ class UploadResponse(BaseModel):
     path: str
 
 
-MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
-
-
 @router.post("/me/avatar", response_model=response.BaseResponse[UploadResponse])
 async def upload_avatar(ctx: RequiresAuth, file: UploadFile) -> Response:
-    if not file.content_type or not file.content_type.startswith("image/"):
-        return response.create(
-            data="users.invalid_image_type",
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     image_data = await file.read()
-    if len(image_data) > MAX_IMAGE_SIZE:
-        return response.create(
-            data="users.image_too_large",
-            status=status.HTTP_400_BAD_REQUEST,
-        )
 
-    path = await storage.save_avatar(ctx.user_id, image_data)
-    if not path:
-        return response.create(
-            data="users.image_processing_failed",
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    result = await users.upload_avatar(ctx, ctx.user_id, image_data)
+    result = response.unwrap(result)
 
-    return response.create(UploadResponse(path=path))
+    return response.create(UploadResponse(path=result))
 
 
 @router.delete("/me/avatar", response_model=response.BaseResponse[None])
 async def delete_avatar(ctx: RequiresAuth) -> Response:
-    await storage.delete_avatar(ctx.user_id)
+    result = await users.delete_avatar(ctx, ctx.user_id)
+    response.unwrap(result)
+
     return response.create(None)
 
 
 @router.post("/me/banner", response_model=response.BaseResponse[UploadResponse])
 async def upload_banner(ctx: RequiresAuth, file: UploadFile) -> Response:
-    if not file.content_type or not file.content_type.startswith("image/"):
-        return response.create(
-            data="users.invalid_image_type",
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     image_data = await file.read()
-    if len(image_data) > MAX_IMAGE_SIZE:
-        return response.create(
-            data="users.image_too_large",
-            status=status.HTTP_400_BAD_REQUEST,
-        )
 
-    path = await storage.save_banner(ctx.user_id, image_data)
-    if not path:
-        return response.create(
-            data="users.image_processing_failed",
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    result = await users.upload_banner(ctx, ctx.user_id, image_data)
+    result = response.unwrap(result)
 
-    return response.create(UploadResponse(path=path))
+    return response.create(UploadResponse(path=result))
 
 
 @router.delete("/me/banner", response_model=response.BaseResponse[None])
 async def delete_banner(ctx: RequiresAuth) -> Response:
-    await storage.delete_banner(ctx.user_id)
+    result = await users.delete_banner(ctx, ctx.user_id)
+    response.unwrap(result)
+
     return response.create(None)
 
 

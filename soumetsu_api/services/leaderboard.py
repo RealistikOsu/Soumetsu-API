@@ -5,6 +5,8 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.constants import is_valid_mode
+from soumetsu_api.constants import is_valid_playstyle
 from soumetsu_api.resources.leaderboard import FirstPlaceEntry
 from soumetsu_api.resources.leaderboard import LeaderboardEntry
 from soumetsu_api.services._common import AbstractContext
@@ -43,7 +45,8 @@ class LeaderboardEntryResult:
     country: str
     privileges: int
     chosen_mode: LeaderboardModeStatsResult
-    rank: int
+    global_rank: int
+    country_rank: int
 
 
 @dataclass
@@ -70,7 +73,8 @@ def _entry_to_result(e: LeaderboardEntry) -> LeaderboardEntryResult:
             playcount=e.chosen_mode.playcount,
             level=e.chosen_mode.level,
         ),
-        rank=e.rank,
+        global_rank=e.global_rank,
+        country_rank=e.country_rank,
     )
 
 
@@ -94,10 +98,10 @@ async def get_global(
     page: int = 1,
     limit: int = 50,
 ) -> LeaderboardError.OnSuccess[list[LeaderboardEntryResult]]:
-    if mode < 0 or mode > 3:
+    if not is_valid_mode(mode):
         return LeaderboardError.INVALID_MODE
 
-    if playstyle < 0 or playstyle > 2:
+    if not is_valid_playstyle(playstyle):
         return LeaderboardError.INVALID_PLAYSTYLE
 
     if limit > 100:
@@ -116,10 +120,10 @@ async def get_country(
     page: int = 1,
     limit: int = 50,
 ) -> LeaderboardError.OnSuccess[list[LeaderboardEntryResult]]:
-    if mode < 0 or mode > 3:
+    if not is_valid_mode(mode):
         return LeaderboardError.INVALID_MODE
 
-    if playstyle < 0 or playstyle > 2:
+    if not is_valid_playstyle(playstyle):
         return LeaderboardError.INVALID_PLAYSTYLE
 
     if limit > 100:
@@ -130,19 +134,33 @@ async def get_country(
     return [_entry_to_result(e) for e in entries]
 
 
-async def get_rank_for_pp(
+async def get_user_rank(
     ctx: AbstractContext,
-    pp: int,
+    user_id: int,
     mode: int = 0,
     playstyle: int = 0,
 ) -> LeaderboardError.OnSuccess[int]:
-    if mode < 0 or mode > 3:
+    if not is_valid_mode(mode):
         return LeaderboardError.INVALID_MODE
 
-    if playstyle < 0 or playstyle > 2:
+    if not is_valid_playstyle(playstyle):
         return LeaderboardError.INVALID_PLAYSTYLE
 
-    return await ctx.leaderboard.get_rank_for_pp(pp, mode, playstyle)
+    return await ctx.leaderboard.get_user_global_rank(user_id, mode, playstyle)
+
+
+async def get_total_ranked_users(
+    ctx: AbstractContext,
+    mode: int = 0,
+    playstyle: int = 0,
+) -> LeaderboardError.OnSuccess[int]:
+    if not is_valid_mode(mode):
+        return LeaderboardError.INVALID_MODE
+
+    if not is_valid_playstyle(playstyle):
+        return LeaderboardError.INVALID_PLAYSTYLE
+
+    return await ctx.leaderboard.get_total_ranked_users(mode, playstyle)
 
 
 async def list_oldest_firsts(
@@ -152,10 +170,10 @@ async def list_oldest_firsts(
     page: int = 1,
     limit: int = 50,
 ) -> LeaderboardError.OnSuccess[list[FirstPlaceResult]]:
-    if mode < 0 or mode > 3:
+    if not is_valid_mode(mode):
         return LeaderboardError.INVALID_MODE
 
-    if playstyle < 0 or playstyle > 2:
+    if not is_valid_playstyle(playstyle):
         return LeaderboardError.INVALID_PLAYSTYLE
 
     if limit > 100:

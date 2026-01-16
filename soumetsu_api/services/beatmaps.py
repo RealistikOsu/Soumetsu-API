@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import time as time_module
 from dataclasses import dataclass
 from typing import override
 
@@ -211,8 +213,6 @@ class RankRequestStatusResult:
 
 
 def _format_relative_time(unix_timestamp: int) -> str:
-    import time as time_module
-
     now = time_module.time()
     tomorrow = unix_timestamp + 86400
 
@@ -260,8 +260,6 @@ async def get_rank_request_status(
         next_expiration=next_expiration,
     )
 
-
-import re
 
 BEATMAP_URL_PATTERNS = [
     re.compile(r"osu\.ppy\.sh/beatmapsets/(\d+)(?:#\w+/(\d+))?"),
