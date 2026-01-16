@@ -35,6 +35,7 @@ _ensure_test_env()
 
 from soumetsu_api.adapters import mysql
 from soumetsu_api.adapters import redis
+from soumetsu_api.adapters import storage
 from soumetsu_api.services._common import AbstractContext
 
 
@@ -204,6 +205,37 @@ class MockRedisClient:
         self._data.clear()
 
 
+class MockStorageAdapter:
+    """A mock storage adapter for testing purposes."""
+
+    def __init__(self) -> None:
+        self._avatars: dict[int, bytes] = {}
+        self._banners: dict[int, bytes] = {}
+
+    def ensure_directories(self) -> None:
+        pass
+
+    async def save_avatar(self, user_id: int, image_data: bytes) -> str | None:
+        self._avatars[user_id] = image_data
+        return f"/avatars/{user_id}.png"
+
+    async def save_banner(self, user_id: int, image_data: bytes) -> str | None:
+        self._banners[user_id] = image_data
+        return f"/banners/{user_id}.png"
+
+    async def delete_avatar(self, user_id: int) -> bool:
+        if user_id in self._avatars:
+            del self._avatars[user_id]
+            return True
+        return False
+
+    async def delete_banner(self, user_id: int) -> bool:
+        if user_id in self._banners:
+            del self._banners[user_id]
+            return True
+        return False
+
+
 class MockContext(AbstractContext):
     """A mock context for testing services without real database connections."""
 
@@ -211,9 +243,11 @@ class MockContext(AbstractContext):
         self,
         mysql_adapter: MockMySQLAdapter | None = None,
         redis_client: MockRedisClient | None = None,
+        storage_adapter: MockStorageAdapter | None = None,
     ) -> None:
         self._mysql_adapter = mysql_adapter or MockMySQLAdapter()
         self._redis_client = redis_client or MockRedisClient()
+        self._storage_adapter = storage_adapter or MockStorageAdapter()
 
     @property
     @override
@@ -224,6 +258,11 @@ class MockContext(AbstractContext):
     @override
     def _redis(self) -> MockRedisClient:  # type: ignore[override]
         return self._redis_client
+
+    @property
+    @override
+    def _storage(self) -> MockStorageAdapter:  # type: ignore[override]
+        return self._storage_adapter
 
 
 @pytest.fixture
@@ -251,11 +290,12 @@ def mock_context(
 async def test_client() -> AsyncGenerator[AsyncClient, None]:
     """Provides an async HTTP client for API integration tests.
 
-    This fixture patches the MySQL and Redis adapters with mocks to avoid
-    requiring actual database connections during tests.
+    This fixture patches the MySQL, Redis, and storage adapters with mocks to avoid
+    requiring actual database connections or filesystem access during tests.
     """
     mock_mysql_adapter = MockMySQLAdapter()
     mock_redis_client = MockRedisClient()
+    mock_storage_adapter = MockStorageAdapter()
 
     def mock_mysql_default() -> MockMySQLAdapter:
         return mock_mysql_adapter
@@ -263,9 +303,13 @@ async def test_client() -> AsyncGenerator[AsyncClient, None]:
     def mock_redis_default() -> MockRedisClient:
         return mock_redis_client
 
+    def mock_storage_default() -> MockStorageAdapter:
+        return mock_storage_adapter
+
     with (
         mock.patch.object(mysql, "default", mock_mysql_default),
         mock.patch.object(redis, "default", mock_redis_default),
+        mock.patch.object(storage, "default", mock_storage_default),
     ):
         # Import here to ensure patches are applied before app creation
         from soumetsu_api import api

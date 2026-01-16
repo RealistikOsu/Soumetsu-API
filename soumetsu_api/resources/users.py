@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.utilities.validation import safe_username
+
+
+@dataclass
+class ClanInfo:
+    id: int
+    name: str
+    tag: str
 
 
 class User(BaseModel):
@@ -150,8 +159,6 @@ class UserRepository:
         return [User(**row) for row in rows]
 
     async def get_clan_info(self, user_id: int) -> ClanInfo | None:
-        from soumetsu_api.services.users import ClanInfo
-
         row = await self._mysql.fetch_one(
             """SELECT c.id, c.name, c.tag
                FROM clans c

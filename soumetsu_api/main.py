@@ -5,7 +5,6 @@ from soumetsu_api import settings
 from soumetsu_api.utilities import logging
 from soumetsu_api.utilities import loop
 
-
 if __name__ == "__main__":
     logging.configure_from_yaml()
     loop.install_optimal_loop()

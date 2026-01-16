@@ -23,6 +23,7 @@ from fastapi import status
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.adapters.mysql import MySQLPoolAdapter
 from soumetsu_api.adapters.redis import RedisClient
+from soumetsu_api.adapters.storage import StorageAdapter
 from soumetsu_api.resources import SessionData
 from soumetsu_api.resources import SessionRepository
 from soumetsu_api.services import AbstractContext
@@ -42,11 +43,22 @@ class HTTPContext(AbstractContext):
     def _redis(self) -> RedisClient:
         return self.request.app.state.redis
 
+    @property
+    @override
+    def _storage(self) -> StorageAdapter:
+        return self.request.app.state.storage
+
 
 class HTTPTransactionContext(AbstractContext):
-    def __init__(self, mysql: ImplementsMySQL, redis: RedisClient) -> None:
+    def __init__(
+        self,
+        mysql: ImplementsMySQL,
+        redis: RedisClient,
+        storage: StorageAdapter,
+    ) -> None:
         self._mysql_conn = mysql
         self._redis_conn = redis
+        self._storage_adapter = storage
 
     @property
     @override
@@ -57,6 +69,11 @@ class HTTPTransactionContext(AbstractContext):
     @override
     def _redis(self) -> RedisClient:
         return self._redis_conn
+
+    @property
+    @override
+    def _storage(self) -> StorageAdapter:
+        return self._storage_adapter
 
 
 class OptionalAuthContext(HTTPContext):
@@ -78,9 +95,10 @@ class AuthenticatedTransactionContext(HTTPTransactionContext):
         self,
         mysql: ImplementsMySQL,
         redis: RedisClient,
+        storage: StorageAdapter,
         session: SessionData,
     ) -> None:
-        super().__init__(mysql, redis)
+        super().__init__(mysql, redis, storage)
         self.session = session
         self.user_id = session.user_id
         self.privileges = session.privileges
@@ -91,9 +109,10 @@ async def _get_transaction_context(
 ) -> AsyncGenerator[HTTPTransactionContext, None]:
     pool: MySQLPoolAdapter = request.app.state.mysql
     redis_client: RedisClient = request.app.state.redis
+    storage_adapter: StorageAdapter = request.app.state.storage
 
     async with pool.transaction() as transaction:
-        yield HTTPTransactionContext(transaction, redis_client)
+        yield HTTPTransactionContext(transaction, redis_client, storage_adapter)
 
 
 def _extract_token(authorization: str = Header(default="")) -> str | None:

@@ -8,6 +8,7 @@ from fastapi import status
 
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.constants import is_valid_playstyle
+from soumetsu_api.resources.users import ClanInfo
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import crypto
@@ -87,13 +88,6 @@ class UserStats:
     replays_watched: int
     level: int
     first_places: int
-
-
-@dataclass
-class ClanInfo:
-    id: int
-    name: str
-    tag: str
 
 
 @dataclass
@@ -443,9 +437,7 @@ async def upload_avatar(
     if not _validate_image_magic(image_data):
         return UserError.INVALID_FILE_FORMAT
 
-    from soumetsu_api.adapters import storage
-
-    path = await storage.save_avatar(user_id, image_data)
+    path = await ctx.user_files.save_avatar(user_id, image_data)
     if not path:
         return UserError.UPLOAD_FAILED
 
@@ -464,9 +456,7 @@ async def upload_banner(
     if not _validate_image_magic(image_data):
         return UserError.INVALID_FILE_FORMAT
 
-    from soumetsu_api.adapters import storage
-
-    path = await storage.save_banner(user_id, image_data)
+    path = await ctx.user_files.save_banner(user_id, image_data)
     if not path:
         return UserError.UPLOAD_FAILED
 
@@ -478,9 +468,7 @@ async def delete_avatar(
     user_id: int,
 ) -> UserError.OnSuccess[None]:
     """Delete user avatar image."""
-    from soumetsu_api.adapters import storage
-
-    await storage.delete_avatar(user_id)
+    await ctx.user_files.delete_avatar(user_id)
     return None
 
 
@@ -489,7 +477,5 @@ async def delete_banner(
     user_id: int,
 ) -> UserError.OnSuccess[None]:
     """Delete user banner image."""
-    from soumetsu_api.adapters import storage
-
-    await storage.delete_banner(user_id)
+    await ctx.user_files.delete_banner(user_id)
     return None

@@ -13,6 +13,7 @@ from starlette.responses import Response
 from soumetsu_api import settings
 from soumetsu_api.adapters import mysql
 from soumetsu_api.adapters import redis
+from soumetsu_api.adapters import storage
 from soumetsu_api.utilities import logging
 
 from . import v2
@@ -27,6 +28,7 @@ def create_app() -> FastAPI:
     initialise_cors(app)
     initialise_mysql(app)
     initialise_redis(app)
+    initialise_storage(app)
     initialise_request_tracing(app)
     initialise_interruptions(app)
 
@@ -108,6 +110,15 @@ def initialise_redis(app: FastAPI) -> None:
     logger.debug(
         "Attached Redis to the app instance.",
     )
+
+
+def initialise_storage(app: FastAPI) -> None:
+    storage_adapter = storage.default()
+    storage_adapter.ensure_directories()
+
+    app.state.storage = storage_adapter
+
+    logger.debug("Attached storage to the app instance.")
 
 
 def initialise_request_tracing(app: FastAPI) -> None:

@@ -3,6 +3,9 @@ from __future__ import annotations
 import time
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.constants import MODE_SUFFIXES
+from soumetsu_api.constants import STATS_TABLES
+from soumetsu_api.utilities.validation import safe_username
 
 
 class AdminRepository:
@@ -76,8 +79,6 @@ class AdminRepository:
         params: dict[str, int | str] = {"user_id": user_id}
 
         if username is not None:
-            from soumetsu_api.utilities.validation import safe_username
-
             updates.append("username = :username")
             updates.append("username_safe = :username_safe")
             params["username"] = username
@@ -111,9 +112,6 @@ class AdminRepository:
         mode: int | None = None,
         playstyle: int = 0,
     ) -> None:
-        from soumetsu_api.resources.user_stats import MODE_SUFFIXES
-        from soumetsu_api.resources.user_stats import STATS_TABLES
-
         table = STATS_TABLES[playstyle]
 
         if mode is not None:

@@ -12,6 +12,7 @@ from fastapi import status
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.adapters.redis import RedisClient
+from soumetsu_api.adapters.storage import StorageAdapter
 from soumetsu_api.resources import AchievementsRepository
 from soumetsu_api.resources import AdminRepository
 from soumetsu_api.resources import BadgesRepository
@@ -23,6 +24,7 @@ from soumetsu_api.resources import FriendsRepository
 from soumetsu_api.resources import LeaderboardRepository
 from soumetsu_api.resources import ScoresRepository
 from soumetsu_api.resources import SessionRepository
+from soumetsu_api.resources import UserFilesRepository
 from soumetsu_api.resources import UserHistoryRepository
 from soumetsu_api.resources import UserRepository
 from soumetsu_api.resources import UserStatsRepository
@@ -62,6 +64,10 @@ class AbstractContext(ABC):
     @property
     @abstractmethod
     def _redis(self) -> RedisClient: ...
+
+    @property
+    @abstractmethod
+    def _storage(self) -> StorageAdapter: ...
 
     @property
     def examples(self) -> ExampleRepository:
@@ -118,3 +124,7 @@ class AbstractContext(ABC):
     @property
     def user_history(self) -> UserHistoryRepository:
         return UserHistoryRepository(self._mysql)
+
+    @property
+    def user_files(self) -> UserFilesRepository:
+        return UserFilesRepository(self._storage)
