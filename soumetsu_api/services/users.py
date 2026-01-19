@@ -6,6 +6,7 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api import settings
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.constants import is_valid_playstyle
 from soumetsu_api.resources.users import ClanInfo
@@ -416,9 +417,6 @@ ALLOWED_IMAGE_MAGIC = (
     b"GIF89a",  # GIF89a
 )
 
-MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
-MAX_BANNER_SIZE = 5 * 1024 * 1024  # 5MB
-
 
 def _validate_image_magic(data: bytes) -> bool:
     """Check if image data starts with a valid magic byte sequence."""
@@ -431,7 +429,7 @@ async def upload_avatar(
     image_data: bytes,
 ) -> UserError.OnSuccess[str]:
     """Save user avatar image. Returns path on success."""
-    if len(image_data) > MAX_AVATAR_SIZE:
+    if len(image_data) > settings.MAX_AVATAR_SIZE:
         return UserError.FILE_TOO_LARGE
 
     if not _validate_image_magic(image_data):
@@ -450,7 +448,7 @@ async def upload_banner(
     image_data: bytes,
 ) -> UserError.OnSuccess[str]:
     """Save user banner image. Returns path on success."""
-    if len(image_data) > MAX_BANNER_SIZE:
+    if len(image_data) > settings.MAX_BANNER_SIZE:
         return UserError.FILE_TOO_LARGE
 
     if not _validate_image_magic(image_data):

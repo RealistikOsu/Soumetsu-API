@@ -23,31 +23,39 @@ REDIS_DATABASE = int(os.environ["REDIS_DATABASE"])
 # CORS configuration (comma-separated list of origins, empty to disable)
 CORS_ALLOWED_ORIGINS: list[str] = [
     origin.strip()
-    for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+    for origin in os.environ.get("SOUMETSUAPI_CORS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
 
 # Session configuration
 SESSION_TTL_SECONDS = int(
-    os.environ.get("SESSION_TTL_SECONDS", 60 * 60 * 24 * 30),
+    os.environ.get("SOUMETSUAPI_SESSION_TTL_SECONDS", 60 * 60 * 24 * 30),
 )  # 30 days
 SESSION_SLIDING_WINDOW = (
-    os.environ.get("SESSION_SLIDING_WINDOW", "true").lower() == "true"
+    os.environ.get("SOUMETSUAPI_SESSION_SLIDING_WINDOW", "true").lower() == "true"
 )
 
 # hCaptcha (bot protection)
-HCAPTCHA_SECRET_KEY = os.environ.get("HCAPTCHA_SECRET_KEY", "")
-HCAPTCHA_ENABLED = os.environ.get("HCAPTCHA_ENABLED", "true").lower() == "true"
+HCAPTCHA_SECRET_KEY = os.environ.get("SOUMETSUAPI_HCAPTCHA_SECRET_KEY", "")
+HCAPTCHA_ENABLED = (
+    os.environ.get("SOUMETSUAPI_HCAPTCHA_ENABLED", "true").lower() == "true"
+)
 
 # File storage
-STORAGE_PATH = os.environ.get("STORAGE_PATH", "/data")
+STORAGE_PATH = os.environ.get("SOUMETSUAPI_STORAGE_PATH", "/data")
 AVATAR_PATH = os.path.join(STORAGE_PATH, "avatars")
 BANNER_PATH = os.path.join(STORAGE_PATH, "banners")
-MAX_AVATAR_SIZE = int(os.environ.get("MAX_AVATAR_SIZE", 2 * 1024 * 1024))  # 2MB
-MAX_BANNER_SIZE = int(os.environ.get("MAX_BANNER_SIZE", 5 * 1024 * 1024))  # 5MB
+MAX_AVATAR_SIZE = int(
+    os.environ.get("SOUMETSUAPI_MAX_AVATAR_SIZE", 2 * 1024 * 1024),
+)  # 2MB
+MAX_BANNER_SIZE = int(
+    os.environ.get("SOUMETSUAPI_MAX_BANNER_SIZE", 5 * 1024 * 1024),
+)  # 5MB
 
 # Rate limiting
-RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+RATE_LIMIT_ENABLED = (
+    os.environ.get("SOUMETSUAPI_RATE_LIMIT_ENABLED", "true").lower() == "true"
+)
 
 # API versioning
 API_VERSION = "v2"
