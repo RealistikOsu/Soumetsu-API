@@ -253,6 +253,44 @@ class BeatmapsRepository:
         result = await self._mysql.fetch_val("SELECT LAST_INSERT_ID()")
         return result or 0
 
+    async def create_rank_request_with_atomic_limit(
+        self,
+        requester_id: int,
+        beatmap_id: int,
+        request_type: str,
+        daily_limit: int,
+    ) -> int | None:
+        """Atomically create a rank request only if the user is below the daily limit.
+
+        Returns the request ID if created, None if the daily limit was reached.
+        """
+        requested_at = int(time_module.time())
+        today_start = requested_at - (requested_at % 86400)
+
+        result = await self._mysql.execute(
+            """INSERT INTO rank_requests (userid, bid, type, time, blacklisted)
+               SELECT :requester_id, :beatmap_id, :request_type, :requested_at, 0
+               FROM dual
+               WHERE (
+                   SELECT COUNT(*) FROM rank_requests
+                   WHERE userid = :requester_id AND time >= :today_start
+               ) < :daily_limit""",
+            {
+                "requester_id": requester_id,
+                "beatmap_id": beatmap_id,
+                "request_type": request_type,
+                "requested_at": requested_at,
+                "today_start": today_start,
+                "daily_limit": daily_limit,
+            },
+        )
+
+        if result == 0:
+            return None
+
+        request_id = await self._mysql.fetch_val("SELECT LAST_INSERT_ID()")
+        return request_id or None
+
     async def find_user_oldest_rank_request_today(
         self,
         requester_id: int,

@@ -182,6 +182,31 @@ class ClansRepository:
             {"user_id": user_id, "clan_id": clan_id, "perms": perms},
         )
 
+    async def add_member_with_atomic_limit(
+        self,
+        clan_id: int,
+        user_id: int,
+        limit: int,
+        perms: int = CLAN_PERM_MEMBER,
+    ) -> bool:
+        """Atomically add a member only if the clan is below the limit.
+
+        Returns True if the member was added, False if the clan was full.
+        """
+        result = await self._mysql.execute(
+            """INSERT INTO user_clans (user, clan, perms)
+               SELECT :user_id, :clan_id, :perms
+               FROM dual
+               WHERE (SELECT COUNT(*) FROM user_clans WHERE clan = :clan_id) < :limit""",
+            {
+                "user_id": user_id,
+                "clan_id": clan_id,
+                "perms": perms,
+                "limit": limit,
+            },
+        )
+        return result > 0
+
     async def remove_member(self, clan_id: int, user_id: int) -> None:
         await self._mysql.execute(
             "DELETE FROM user_clans WHERE user = :user_id AND clan = :clan_id",

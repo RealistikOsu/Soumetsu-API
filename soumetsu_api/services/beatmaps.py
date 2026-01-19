@@ -289,10 +289,6 @@ async def submit_rank_request(
     user_id: int,
     url: str,
 ) -> BeatmapError.OnSuccess[int]:
-    submitted = await ctx.beatmaps.count_user_rank_requests_today(user_id)
-    if submitted >= DAILY_RANK_REQUEST_LIMIT:
-        return BeatmapError.DAILY_LIMIT_REACHED
-
     parsed = parse_beatmap_url(url)
     if not parsed:
         return BeatmapError.INVALID_URL
@@ -312,9 +308,13 @@ async def submit_rank_request(
         if beatmapset and all(b.ranked in (2, 3, 4, 5) for b in beatmapset):
             return BeatmapError.ALREADY_RANKED
 
-    request_id = await ctx.beatmaps.create_rank_request(
+    request_id = await ctx.beatmaps.create_rank_request_with_atomic_limit(
         user_id,
         beatmap_id,
         request_type,
+        DAILY_RANK_REQUEST_LIMIT,
     )
+    if request_id is None:
+        return BeatmapError.DAILY_LIMIT_REACHED
+
     return request_id

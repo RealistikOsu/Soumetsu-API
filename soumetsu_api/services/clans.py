@@ -230,13 +230,17 @@ async def join_clan(
     if not clan:
         return ClanError.CLAN_NOT_FOUND
 
-    member_count = await ctx.clans.get_member_count(clan_id)
-    if member_count >= clan.member_limit:
+    added = await ctx.clans.add_member_with_atomic_limit(
+        clan_id,
+        user_id,
+        clan.member_limit,
+        CLAN_PERM_MEMBER,
+    )
+    if not added:
         return ClanError.CLAN_FULL
 
-    await ctx.clans.add_member(clan_id, user_id, CLAN_PERM_MEMBER)
-
-    return _clan_to_result(clan, member_count + 1)
+    member_count = await ctx.clans.get_member_count(clan_id)
+    return _clan_to_result(clan, member_count)
 
 
 async def leave_clan(
