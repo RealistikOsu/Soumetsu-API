@@ -7,7 +7,6 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from soumetsu_api.services import ServiceError
-from soumetsu_api.services import is_error
 from soumetsu_api.utilities import logging
 
 logger = logging.get_logger(__name__)
@@ -36,7 +35,7 @@ def create(data: Any, *, status: int = status.HTTP_200_OK) -> Response:
 
 
 def unwrap[T](service_response: ServiceError.OnSuccess[T]) -> T:
-    if is_error(service_response):
+    if isinstance(service_response, ServiceError):
         logger.debug(
             "API call was interrupted by a service error.",
             extra={

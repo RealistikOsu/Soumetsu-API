@@ -5,7 +5,6 @@ from abc import ABCMeta
 from abc import abstractmethod
 from enum import EnumMeta
 from enum import StrEnum
-from typing import Self
 
 try:
     from typing import TypeIs
@@ -40,7 +39,7 @@ class _CombinedMeta(EnumMeta, ABCMeta):
 
 class ServiceError(ABC, StrEnum, metaclass=_CombinedMeta):
     _ignore_ = ["OnSuccess"]
-    type OnSuccess[T] = T | Self
+    type OnSuccess[T] = T | ServiceError
 
     @abstractmethod
     def service(self) -> str: ...
