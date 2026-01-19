@@ -14,6 +14,3 @@ match settings.APP_COMPONENT:
         asgi_app = api.create_app()
     case _:
         raise ValueError(f"Invalid app component: {settings.APP_COMPONENT}")
-
-if __name__ == "__main__":
-    pass
