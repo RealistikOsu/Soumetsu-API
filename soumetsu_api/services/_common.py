@@ -6,7 +6,11 @@ from abc import abstractmethod
 from enum import EnumMeta
 from enum import StrEnum
 from typing import Self
-from typing import TypeIs
+
+try:
+    from typing import TypeIs
+except ImportError:
+    from typing_extensions import TypeIs
 
 from fastapi import status
 

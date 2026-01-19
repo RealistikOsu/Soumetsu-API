@@ -5,13 +5,12 @@ from soumetsu_api import settings
 from soumetsu_api.utilities import logging
 from soumetsu_api.utilities import loop
 
-if __name__ == "__main__":
-    logging.configure_from_yaml()
-    loop.install_optimal_loop()
+logging.configure_from_yaml()
+loop.install_optimal_loop()
 
-    match settings.APP_COMPONENT:
-        case "fastapi":
-            # Will be ran by the uvicorn CLI.
-            asgi_app = api.create_app()
-        case _:
-            raise ValueError(f"Invalid app component: {settings.APP_COMPONENT}")
+match settings.APP_COMPONENT:
+    case "fastapi":
+        # Will be ran by the uvicorn CLI.
+        asgi_app = api.create_app()
+    case _:
+        raise ValueError(f"Invalid app component: {settings.APP_COMPONENT}")
