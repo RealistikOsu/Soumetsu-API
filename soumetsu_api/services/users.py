@@ -7,8 +7,8 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api import settings
+from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
-from soumetsu_api.constants import is_valid_playstyle
 from soumetsu_api.resources.users import ClanInfo
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -22,7 +22,7 @@ class UserError(ServiceError):
     FORBIDDEN = "forbidden"
     USERNAME_TAKEN = "username_taken"
     USERNAME_RESERVED = "username_reserved"
-    INVALID_PLAYSTYLE = "invalid_playstyle"
+    INVALID_CUSTOM_MODE = "invalid_custom_mode"
     INVALID_MODE = "invalid_mode"
     NO_DISCORD_LINKED = "no_discord_linked"
     INVALID_PASSWORD = "invalid_password"
@@ -47,7 +47,7 @@ class UserError(ServiceError):
             case UserError.FILE_TOO_LARGE:
                 return status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
             case (
-                UserError.INVALID_PLAYSTYLE
+                UserError.INVALID_CUSTOM_MODE
                 | UserError.INVALID_MODE
                 | UserError.INVALID_PASSWORD
                 | UserError.WEAK_PASSWORD
@@ -75,7 +75,7 @@ class UserProfile:
 @dataclass
 class UserStats:
     mode: int
-    playstyle: int
+    custom_mode: int
     global_rank: int
     country_rank: int
     pp: int
@@ -124,13 +124,13 @@ async def get_card(
 
     settings = await ctx.user_stats.get_settings(user_id)
     mode = settings.favourite_mode if settings else 0
-    playstyle = settings.prefer_relax if settings else 0
+    custom_mode = settings.prefer_relax if settings else 0
 
-    global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, playstyle)
+    global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, custom_mode)
     country_rank = await ctx.leaderboard.get_user_country_rank(
         user_id,
         mode,
-        playstyle,
+        custom_mode,
         user.country,
     )
 
@@ -149,13 +149,13 @@ async def get_profile(
     ctx: AbstractContext,
     user_id: int,
     mode: int = 0,
-    playstyle: int = 0,
+    custom_mode: int = 0,
 ) -> UserError.OnSuccess[UserProfile]:
     if not is_valid_mode(mode):
         return UserError.INVALID_MODE
 
-    if not is_valid_playstyle(playstyle):
-        return UserError.INVALID_PLAYSTYLE
+    if not is_valid_custom_mode(custom_mode):
+        return UserError.INVALID_CUSTOM_MODE
 
     user = await ctx.users.find_by_id(user_id)
     if not user:
@@ -165,15 +165,19 @@ async def get_profile(
     if privileges.is_restricted(user_privs):
         return UserError.USER_RESTRICTED
 
-    stats = await ctx.user_stats.get_stats(user_id, mode, playstyle)
-    global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, playstyle)
+    stats = await ctx.user_stats.get_stats(user_id, mode, custom_mode)
+    global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, custom_mode)
     country_rank = await ctx.leaderboard.get_user_country_rank(
         user_id,
         mode,
-        playstyle,
+        custom_mode,
         user.country,
     )
-    first_places = await ctx.user_stats.get_first_place_count(user_id, mode, playstyle)
+    first_places = await ctx.user_stats.get_first_place_count(
+        user_id,
+        mode,
+        custom_mode,
+    )
 
     clan_info = await ctx.users.get_clan_info(user_id)
 
@@ -188,7 +192,7 @@ async def get_profile(
         clan=clan_info,
         stats=UserStats(
             mode=mode,
-            playstyle=playstyle,
+            custom_mode=custom_mode,
             global_rank=global_rank,
             country_rank=country_rank,
             pp=stats.pp if stats else 0,

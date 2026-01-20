@@ -13,7 +13,7 @@ class AdminError(ServiceError):
     USER_NOT_FOUND = "user_not_found"
     FORBIDDEN = "forbidden"
     INVALID_MODE = "invalid_mode"
-    INVALID_PLAYSTYLE = "invalid_playstyle"
+    INVALID_CUSTOM_MODE = "invalid_custom_mode"
 
     @override
     def service(self) -> str:
@@ -26,7 +26,7 @@ class AdminError(ServiceError):
                 return status.HTTP_404_NOT_FOUND
             case AdminError.FORBIDDEN:
                 return status.HTTP_403_FORBIDDEN
-            case AdminError.INVALID_MODE | AdminError.INVALID_PLAYSTYLE:
+            case AdminError.INVALID_MODE | AdminError.INVALID_CUSTOM_MODE:
                 return status.HTTP_400_BAD_REQUEST
             case _:
                 return status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -175,7 +175,7 @@ async def wipe_user_stats(
     admin_privileges: int,
     user_id: int,
     mode: int | None = None,
-    playstyle: int = 0,
+    custom_mode: int = 0,
 ) -> AdminError.OnSuccess[None]:
     if not check_admin(admin_privileges, privileges.UserPrivileges.ADMIN_WIPE_USERS):
         return AdminError.FORBIDDEN
@@ -183,21 +183,21 @@ async def wipe_user_stats(
     if mode is not None and (mode < 0 or mode > 3):
         return AdminError.INVALID_MODE
 
-    if playstyle < 0 or playstyle > 2:
-        return AdminError.INVALID_PLAYSTYLE
+    if custom_mode < 0 or custom_mode > 2:
+        return AdminError.INVALID_CUSTOM_MODE
 
     user = await ctx.users.find_by_id(user_id)
     if not user:
         return AdminError.USER_NOT_FOUND
 
-    await ctx.admin.wipe_user_stats(user_id, mode, playstyle)
+    await ctx.admin.wipe_user_stats(user_id, mode, custom_mode)
 
     mode_name = ["std", "taiko", "ctb", "mania"][mode] if mode is not None else "all"
-    playstyle_name = ["vanilla", "relax", "autopilot"][playstyle]
+    custom_mode_name = ["vanilla", "relax", "autopilot"][custom_mode]
 
     await ctx.admin.create_rap_log(
         admin_id,
-        f"Wiped {user.username}'s {mode_name} stats ({playstyle_name})",
+        f"Wiped {user.username}'s {mode_name} stats ({custom_mode_name})",
         "soumetsu-api",
     )
 

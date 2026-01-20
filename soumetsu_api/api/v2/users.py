@@ -10,6 +10,8 @@ from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
+from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import GameMode
 from soumetsu_api.services import achievements
 from soumetsu_api.services import beatmaps
 from soumetsu_api.services import comments
@@ -28,7 +30,7 @@ class ClanInfoResponse(BaseModel):
 
 class UserStatsResponse(BaseModel):
     mode: int
-    playstyle: int
+    custom_mode: int
     global_rank: int
     country_rank: int
     pp: int
@@ -150,10 +152,10 @@ async def resolve_username(
 @router.get("/me", response_model=response.BaseResponse[UserProfileResponse])
 async def get_me(
     ctx: RequiresAuth,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await users.get_profile(ctx, ctx.user_id, mode, playstyle)
+    result = await users.get_profile(ctx, ctx.user_id, mode, custom_mode)
     result = response.unwrap(result)
 
     clan = None
@@ -176,7 +178,7 @@ async def get_me(
             clan=clan,
             stats=UserStatsResponse(
                 mode=result.stats.mode,
-                playstyle=result.stats.playstyle,
+                custom_mode=result.stats.custom_mode,
                 global_rank=result.stats.global_rank,
                 country_rank=result.stats.country_rank,
                 pp=result.stats.pp,
@@ -359,10 +361,10 @@ async def get_user_card(
 async def get_user(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await users.get_profile(ctx, user_id, mode, playstyle)
+    result = await users.get_profile(ctx, user_id, mode, custom_mode)
     result = response.unwrap(result)
 
     clan = None
@@ -385,7 +387,7 @@ async def get_user(
             clan=clan,
             stats=UserStatsResponse(
                 mode=result.stats.mode,
-                playstyle=result.stats.playstyle,
+                custom_mode=result.stats.custom_mode,
                 global_rank=result.stats.global_rank,
                 country_rank=result.stats.country_rank,
                 pp=result.stats.pp,
@@ -532,10 +534,10 @@ class PPHistoryResponse(BaseModel):
 async def get_user_rank_history(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await user_history.get_rank_history(ctx, user_id, mode, playstyle)
+    result = await user_history.get_rank_history(ctx, user_id, mode, custom_mode)
     result = response.unwrap(result)
 
     return response.create(
@@ -557,10 +559,10 @@ async def get_user_rank_history(
 async def get_user_pp_history(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await user_history.get_pp_history(ctx, user_id, mode, playstyle)
+    result = await user_history.get_pp_history(ctx, user_id, mode, custom_mode)
     result = response.unwrap(result)
 
     return response.create(
@@ -592,8 +594,8 @@ class MostPlayedResponse(BaseModel):
 async def get_user_most_played(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(5, ge=1, le=50),
 ) -> Response:
@@ -601,7 +603,7 @@ async def get_user_most_played(
         ctx,
         user_id,
         mode,
-        playstyle,
+        custom_mode,
         page,
         limit,
     )

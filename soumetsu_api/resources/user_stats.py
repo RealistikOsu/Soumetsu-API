@@ -34,8 +34,8 @@ class UserStatsRepository:
     def __init__(self, mysql: ImplementsMySQL) -> None:
         self._mysql = mysql
 
-    def _get_table(self, playstyle: int) -> str:
-        return get_stats_table(playstyle)
+    def _get_table(self, custom_mode: int) -> str:
+        return get_stats_table(custom_mode)
 
     def _get_mode_suffix(self, mode: int) -> str:
         return get_mode_suffix(mode)
@@ -60,9 +60,9 @@ class UserStatsRepository:
         self,
         user_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
     ) -> UserStatsData | None:
-        table = self._get_table(playstyle)
+        table = self._get_table(custom_mode)
         suffix = self._get_mode_suffix(mode)
 
         query = f"""
@@ -101,7 +101,7 @@ class UserStatsRepository:
         self,
         user_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
     ) -> int:
         query = """
             SELECT COUNT(*) FROM first_places
@@ -111,7 +111,7 @@ class UserStatsRepository:
         """
         result = await self._mysql.fetch_val(
             query,
-            {"user_id": user_id, "mode": mode, "relax": playstyle},
+            {"user_id": user_id, "mode": mode, "relax": custom_mode},
         )
         return result or 0
 

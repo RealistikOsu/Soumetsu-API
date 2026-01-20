@@ -55,15 +55,15 @@ class ScoresRepository:
     def __init__(self, mysql: ImplementsMySQL) -> None:
         self._mysql = mysql
 
-    def _get_table(self, playstyle: int) -> str:
-        return SCORE_TABLES[playstyle]
+    def _get_table(self, custom_mode: int) -> str:
+        return SCORE_TABLES[custom_mode]
 
     async def find_by_id(
         self,
         score_id: int,
-        playstyle: int,
+        custom_mode: int,
     ) -> ScoreData | None:
-        table = self._get_table(playstyle)
+        table = self._get_table(custom_mode)
         query = f"""
             SELECT id, beatmap_md5, userid as player_id, score, max_combo,
                    full_combo, mods, 300_count as count_300,
@@ -84,11 +84,11 @@ class ScoresRepository:
         self,
         player_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(playstyle)
+        table = self._get_table(custom_mode)
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",
@@ -124,11 +124,11 @@ class ScoresRepository:
         self,
         player_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(playstyle)
+        table = self._get_table(custom_mode)
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",
@@ -162,11 +162,11 @@ class ScoresRepository:
         self,
         player_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(playstyle)
+        table = self._get_table(custom_mode)
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",
@@ -197,7 +197,7 @@ class ScoresRepository:
             {
                 "player_id": player_id,
                 "mode": mode,
-                "relax": playstyle,
+                "relax": custom_mode,
                 "limit": limit,
                 "offset": offset,
             },
@@ -208,11 +208,11 @@ class ScoresRepository:
         self,
         player_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(playstyle)
+        table = self._get_table(custom_mode)
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",
@@ -273,11 +273,11 @@ class ScoresRepository:
         self,
         beatmap_md5: str,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithPlayer]:
-        table = self._get_table(playstyle)
+        table = self._get_table(custom_mode)
 
         query = f"""
             SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score, s.max_combo,

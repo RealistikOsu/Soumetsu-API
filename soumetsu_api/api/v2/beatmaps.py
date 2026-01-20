@@ -9,6 +9,8 @@ from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import OptionalAuth
 from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresContext
+from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import GameMode
 from soumetsu_api.services import beatmaps
 
 router = APIRouter(prefix="/beatmaps")
@@ -162,8 +164,8 @@ async def get_beatmap(
 async def get_beatmap_scores(
     ctx: RequiresContext,
     beatmap_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
@@ -177,7 +179,7 @@ async def get_beatmap_scores(
     scores_list = await ctx.scores.list_beatmap_scores(
         beatmap.beatmap_md5,
         mode,
-        playstyle,
+        custom_mode,
         limit,
         offset,
     )

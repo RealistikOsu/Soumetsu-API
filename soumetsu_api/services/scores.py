@@ -130,9 +130,9 @@ def _score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapRe
 async def get_score(
     ctx: AbstractContext,
     score_id: int,
-    playstyle: int = 0,
+    custom_mode: int = 0,
 ) -> ScoreError.OnSuccess[ScoreResult]:
-    score = await ctx.scores.find_by_id(score_id, playstyle)
+    score = await ctx.scores.find_by_id(score_id, custom_mode)
     if not score:
         return ScoreError.SCORE_NOT_FOUND
 
@@ -143,7 +143,7 @@ async def get_player_best(
     ctx: AbstractContext,
     player_id: int,
     mode: int = 0,
-    playstyle: int = 0,
+    custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
@@ -162,7 +162,7 @@ async def get_player_best(
     scores = await ctx.scores.list_player_best(
         player_id,
         mode,
-        playstyle,
+        custom_mode,
         limit,
         offset,
     )
@@ -173,7 +173,7 @@ async def get_player_recent(
     ctx: AbstractContext,
     player_id: int,
     mode: int = 0,
-    playstyle: int = 0,
+    custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
@@ -192,7 +192,7 @@ async def get_player_recent(
     scores = await ctx.scores.list_player_recent(
         player_id,
         mode,
-        playstyle,
+        custom_mode,
         limit,
         offset,
     )
@@ -203,7 +203,7 @@ async def get_player_firsts(
     ctx: AbstractContext,
     player_id: int,
     mode: int = 0,
-    playstyle: int = 0,
+    custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
@@ -222,7 +222,7 @@ async def get_player_firsts(
     scores = await ctx.scores.list_player_firsts(
         player_id,
         mode,
-        playstyle,
+        custom_mode,
         limit,
         offset,
     )
@@ -233,7 +233,7 @@ async def get_player_pinned(
     ctx: AbstractContext,
     player_id: int,
     mode: int = 0,
-    playstyle: int = 0,
+    custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
@@ -252,7 +252,7 @@ async def get_player_pinned(
     scores = await ctx.scores.list_player_pinned(
         player_id,
         mode,
-        playstyle,
+        custom_mode,
         limit,
         offset,
     )
@@ -263,9 +263,9 @@ async def pin_score(
     ctx: AbstractContext,
     player_id: int,
     score_id: int,
-    playstyle: int = 0,
+    custom_mode: int = 0,
 ) -> ScoreError.OnSuccess[None]:
-    score = await ctx.scores.find_by_id(score_id, playstyle)
+    score = await ctx.scores.find_by_id(score_id, custom_mode)
     if not score:
         return ScoreError.SCORE_NOT_FOUND
 

@@ -14,8 +14,8 @@ class GameMode(IntEnum):
     MANIA = 3
 
 
-class Playstyle(IntEnum):
-    """Score playstyles (vanilla, relax, autopilot)."""
+class CustomMode(IntEnum):
+    """Custom game modes (vanilla, relax, autopilot)."""
 
     VANILLA = 0
     RELAX = 1
@@ -30,11 +30,11 @@ MODE_SUFFIXES: dict[int, str] = {
     GameMode.MANIA: "mania",
 }
 
-# Database table names for playstyle-specific stats
+# Database table names for custom mode-specific stats
 STATS_TABLES: dict[int, str] = {
-    Playstyle.VANILLA: "users_stats",
-    Playstyle.RELAX: "rx_stats",
-    Playstyle.AUTOPILOT: "ap_stats",
+    CustomMode.VANILLA: "users_stats",
+    CustomMode.RELAX: "rx_stats",
+    CustomMode.AUTOPILOT: "ap_stats",
 }
 
 # Level calculation constants
@@ -52,9 +52,9 @@ def is_valid_mode(mode: int) -> bool:
     return 0 <= mode <= 3
 
 
-def is_valid_playstyle(playstyle: int) -> bool:
-    """Check if playstyle is valid (0-2)."""
-    return 0 <= playstyle <= 2
+def is_valid_custom_mode(custom_mode: int) -> bool:
+    """Check if custom mode is valid (0-2)."""
+    return 0 <= custom_mode <= 2
 
 
 def get_mode_suffix(mode: int) -> str:
@@ -62,6 +62,6 @@ def get_mode_suffix(mode: int) -> str:
     return MODE_SUFFIXES[mode]
 
 
-def get_stats_table(playstyle: int) -> str:
-    """Get the database table name for a playstyle."""
-    return STATS_TABLES[playstyle]
+def get_stats_table(custom_mode: int) -> str:
+    """Get the database table name for a custom mode."""
+    return STATS_TABLES[custom_mode]

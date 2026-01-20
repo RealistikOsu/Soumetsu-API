@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
+from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import GameMode
 from soumetsu_api.services import scores
 
 router = APIRouter()
@@ -51,9 +53,9 @@ class ScoreWithBeatmapResponse(ScoreResponse):
 async def get_score(
     ctx: RequiresContext,
     score_id: int,
-    playstyle: int = Query(0, ge=0, le=2),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await scores.get_score(ctx, score_id, playstyle)
+    result = await scores.get_score(ctx, score_id, custom_mode)
     result = response.unwrap(result)
 
     return response.create(
@@ -85,9 +87,9 @@ async def get_score(
 async def pin_score(
     ctx: RequiresAuthTransaction,
     score_id: int,
-    playstyle: int = Query(0, ge=0, le=2),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await scores.pin_score(ctx, ctx.user_id, score_id, playstyle)
+    result = await scores.pin_score(ctx, ctx.user_id, score_id, custom_mode)
     response.unwrap(result)
 
     return response.create(None)
@@ -142,12 +144,12 @@ def _to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
 async def get_player_best(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_player_best(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_best(ctx, user_id, mode, custom_mode, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])
@@ -160,12 +162,19 @@ async def get_player_best(
 async def get_player_recent(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_player_recent(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_recent(
+        ctx,
+        user_id,
+        mode,
+        custom_mode,
+        page,
+        limit,
+    )
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])
@@ -178,12 +187,19 @@ async def get_player_recent(
 async def get_player_firsts(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_player_firsts(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_firsts(
+        ctx,
+        user_id,
+        mode,
+        custom_mode,
+        page,
+        limit,
+    )
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])
@@ -196,12 +212,19 @@ async def get_player_firsts(
 async def get_player_pinned(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_player_pinned(ctx, user_id, mode, playstyle, page, limit)
+    result = await scores.get_player_pinned(
+        ctx,
+        user_id,
+        mode,
+        custom_mode,
+        page,
+        limit,
+    )
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])

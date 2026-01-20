@@ -8,8 +8,8 @@ from soumetsu_api import settings
 from soumetsu_api.adapters.redis import RedisClient
 from soumetsu_api.utilities import crypto
 
-SESSION_KEY_PREFIX = "session:"
-USER_SESSIONS_PREFIX = "user_sessions:"
+SESSION_KEY_PREFIX = "soumetsuapi:session:"
+USER_SESSIONS_PREFIX = "soumetsuapi:user_sessions:"
 
 
 @dataclass

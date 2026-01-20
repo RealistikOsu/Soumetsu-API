@@ -110,9 +110,9 @@ class AdminRepository:
         self,
         user_id: int,
         mode: int | None = None,
-        playstyle: int = 0,
+        custom_mode: int = 0,
     ) -> None:
-        table = STATS_TABLES[playstyle]
+        table = STATS_TABLES[custom_mode]
 
         if mode is not None:
             suffix = MODE_SUFFIXES[mode]

@@ -175,13 +175,13 @@ class BeatmapsRepository:
         self,
         user_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 5,
         offset: int = 0,
     ) -> list[MostPlayedBeatmapData]:
-        # Select table based on playstyle
+        # Select table based on custom_mode
         scores_tables = ["scores", "scores_relax", "scores_ap"]
-        scores_table = scores_tables[playstyle]
+        scores_table = scores_tables[custom_mode]
 
         rows = await self._mysql.fetch_all(
             f"""SELECT b.beatmap_id, b.beatmapset_id, b.song_name,

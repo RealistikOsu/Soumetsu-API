@@ -39,17 +39,17 @@ class FirstPlaceEntry(BaseModel):
 
 
 def _build_leaderboard_key(
-    playstyle: int,
+    custom_mode: int,
     mode: int,
     country: str | None = None,
 ) -> str:
     suffix = get_mode_suffix(mode)
-    playstyle_names = {0: "vanilla", 1: "relax", 2: "autopilot"}
-    playstyle_name = playstyle_names.get(playstyle, "vanilla")
+    custom_mode_names = {0: "vanilla", 1: "relax", 2: "autopilot"}
+    custom_mode_name = custom_mode_names.get(custom_mode, "vanilla")
 
     if country:
-        return f"{LEADERBOARD_KEY_PREFIX}:{playstyle_name}:{suffix}:{country.lower()}"
-    return f"{LEADERBOARD_KEY_PREFIX}:{playstyle_name}:{suffix}"
+        return f"{LEADERBOARD_KEY_PREFIX}:{custom_mode_name}:{suffix}:{country.lower()}"
+    return f"{LEADERBOARD_KEY_PREFIX}:{custom_mode_name}:{suffix}"
 
 
 def _calculate_level(total_score: int) -> float:
@@ -100,11 +100,11 @@ class LeaderboardRepository:
     async def get_global(
         self,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[LeaderboardEntry]:
-        key = _build_leaderboard_key(playstyle, mode)
+        key = _build_leaderboard_key(custom_mode, mode)
         user_ids = await self._redis.zrevrange(key, offset, offset + limit - 1)
 
         if not user_ids:
@@ -113,7 +113,7 @@ class LeaderboardRepository:
         return await self._fetch_users_with_ranks(
             user_ids,
             mode,
-            playstyle,
+            custom_mode,
             offset,
         )
 
@@ -121,11 +121,11 @@ class LeaderboardRepository:
         self,
         country: str,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[LeaderboardEntry]:
-        key = _build_leaderboard_key(playstyle, mode, country)
+        key = _build_leaderboard_key(custom_mode, mode, country)
         user_ids = await self._redis.zrevrange(key, offset, offset + limit - 1)
 
         if not user_ids:
@@ -134,7 +134,7 @@ class LeaderboardRepository:
         return await self._fetch_users_with_ranks(
             user_ids,
             mode,
-            playstyle,
+            custom_mode,
             offset,
             country=country,
         )
@@ -143,9 +143,9 @@ class LeaderboardRepository:
         self,
         user_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
     ) -> int:
-        key = _build_leaderboard_key(playstyle, mode)
+        key = _build_leaderboard_key(custom_mode, mode)
         rank = await self._redis.zrevrank(key, str(user_id))
         if rank is None:
             return 0
@@ -155,10 +155,10 @@ class LeaderboardRepository:
         self,
         user_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         country: str,
     ) -> int:
-        key = _build_leaderboard_key(playstyle, mode, country)
+        key = _build_leaderboard_key(custom_mode, mode, country)
         rank = await self._redis.zrevrank(key, str(user_id))
         if rank is None:
             return 0
@@ -168,23 +168,23 @@ class LeaderboardRepository:
         self,
         user_id: int,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
     ) -> float | None:
-        key = _build_leaderboard_key(playstyle, mode)
+        key = _build_leaderboard_key(custom_mode, mode)
         return await self._redis.zscore(key, str(user_id))
 
     async def _fetch_users_with_ranks(
         self,
         user_ids: list[str],
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         base_offset: int,
         country: str | None = None,
     ) -> list[LeaderboardEntry]:
         if not user_ids:
             return []
 
-        table = get_stats_table(playstyle)
+        table = get_stats_table(custom_mode)
         suffix = get_mode_suffix(mode)
 
         placeholders = ", ".join(f":id_{i}" for i in range(len(user_ids)))
@@ -214,7 +214,7 @@ class LeaderboardRepository:
             country_rank = await self.get_user_country_rank(
                 uid,
                 mode,
-                playstyle,
+                custom_mode,
                 row["country"],
             )
 
@@ -240,7 +240,7 @@ class LeaderboardRepository:
     async def list_oldest_firsts(
         self,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         limit: int = 50,
         offset: int = 0,
     ) -> list[FirstPlaceEntry]:
@@ -258,7 +258,7 @@ class LeaderboardRepository:
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"mode": mode, "relax": playstyle, "limit": limit, "offset": offset},
+            {"mode": mode, "relax": custom_mode, "limit": limit, "offset": offset},
         )
 
         return [FirstPlaceEntry(**row) for row in rows]
@@ -266,16 +266,16 @@ class LeaderboardRepository:
     async def get_total_ranked_users(
         self,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
     ) -> int:
-        key = _build_leaderboard_key(playstyle, mode)
+        key = _build_leaderboard_key(custom_mode, mode)
         return await self._redis.zcard(key)
 
     async def get_country_total_ranked_users(
         self,
         mode: int,
-        playstyle: int,
+        custom_mode: int,
         country: str,
     ) -> int:
-        key = _build_leaderboard_key(playstyle, mode, country)
+        key = _build_leaderboard_key(custom_mode, mode, country)
         return await self._redis.zcard(key)

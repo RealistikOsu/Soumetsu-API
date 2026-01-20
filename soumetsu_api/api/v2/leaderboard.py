@@ -7,6 +7,8 @@ from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresContext
+from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import GameMode
 from soumetsu_api.services import leaderboard
 
 router = APIRouter(prefix="/leaderboard")
@@ -83,12 +85,12 @@ def _first_to_response(f: leaderboard.FirstPlaceResult) -> FirstPlaceResponse:
 @router.get("/", response_model=response.BaseResponse[list[LeaderboardEntryResponse]])
 async def get_global(
     ctx: RequiresContext,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await leaderboard.get_global(ctx, mode, playstyle, page, limit)
+    result = await leaderboard.get_global(ctx, mode, custom_mode, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(e) for e in result])
@@ -101,12 +103,12 @@ async def get_global(
 async def get_country(
     ctx: RequiresContext,
     country: str,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await leaderboard.get_country(ctx, country, mode, playstyle, page, limit)
+    result = await leaderboard.get_country(ctx, country, mode, custom_mode, page, limit)
     result = response.unwrap(result)
 
     return response.create([_to_response(e) for e in result])
@@ -116,10 +118,10 @@ async def get_country(
 async def get_user_rank(
     ctx: RequiresContext,
     user_id: int,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await leaderboard.get_user_rank(ctx, user_id, mode, playstyle)
+    result = await leaderboard.get_user_rank(ctx, user_id, mode, custom_mode)
     result = response.unwrap(result)
 
     return response.create(RankResponse(rank=result))
@@ -128,10 +130,10 @@ async def get_user_rank(
 @router.get("/total", response_model=response.BaseResponse[TotalUsersResponse])
 async def get_total_ranked_users(
     ctx: RequiresContext,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await leaderboard.get_total_ranked_users(ctx, mode, playstyle)
+    result = await leaderboard.get_total_ranked_users(ctx, mode, custom_mode)
     result = response.unwrap(result)
 
     return response.create(TotalUsersResponse(total=result))
@@ -143,12 +145,12 @@ async def get_total_ranked_users(
 )
 async def list_oldest_firsts(
     ctx: RequiresContext,
-    mode: int = Query(0, ge=0, le=3),
-    playstyle: int = Query(0, ge=0, le=2),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await leaderboard.list_oldest_firsts(ctx, mode, playstyle, page, limit)
+    result = await leaderboard.list_oldest_firsts(ctx, mode, custom_mode, page, limit)
     result = response.unwrap(result)
 
     return response.create([_first_to_response(f) for f in result])

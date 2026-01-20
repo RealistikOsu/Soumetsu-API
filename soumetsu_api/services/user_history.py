@@ -55,7 +55,7 @@ async def get_rank_history(
     ctx: AbstractContext,
     user_id: int,
     mode: int,
-    playstyle: int,
+    custom_mode: int,
 ) -> UserHistoryError.OnSuccess[list[RankHistoryResult]]:
     user = await ctx.users.find_by_id(user_id)
     if not user:
@@ -65,8 +65,8 @@ async def get_rank_history(
     if privileges.is_restricted(user_privs):
         return UserHistoryError.USER_RESTRICTED
 
-    # Mode combines mode and playstyle: mode + playstyle * 4
-    combined_mode = mode + playstyle * 4
+    # Mode combines mode and custom_mode: mode + custom_mode * 4
+    combined_mode = mode + custom_mode * 4
     history = await ctx.user_history.get_history(user_id, combined_mode)
 
     return [
@@ -83,7 +83,7 @@ async def get_pp_history(
     ctx: AbstractContext,
     user_id: int,
     mode: int,
-    playstyle: int,
+    custom_mode: int,
 ) -> UserHistoryError.OnSuccess[list[PPHistoryResult]]:
     user = await ctx.users.find_by_id(user_id)
     if not user:
@@ -93,7 +93,7 @@ async def get_pp_history(
     if privileges.is_restricted(user_privs):
         return UserHistoryError.USER_RESTRICTED
 
-    combined_mode = mode + playstyle * 4
+    combined_mode = mode + custom_mode * 4
     history = await ctx.user_history.get_history(user_id, combined_mode)
 
     return [

@@ -169,7 +169,7 @@ async def get_user_most_played(
     ctx: AbstractContext,
     user_id: int,
     mode: int,
-    playstyle: int,
+    custom_mode: int,
     page: int = 1,
     limit: int = 5,
 ) -> BeatmapError.OnSuccess[list[MostPlayedResult]]:
@@ -180,7 +180,7 @@ async def get_user_most_played(
     beatmaps = await ctx.beatmaps.get_user_most_played(
         user_id,
         mode,
-        playstyle,
+        custom_mode,
         limit,
         offset,
     )

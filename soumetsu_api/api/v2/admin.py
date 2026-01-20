@@ -35,7 +35,7 @@ class UpdateUserRequest(BaseModel):
 
 class WipeStatsRequest(BaseModel):
     mode: int | None = None
-    playstyle: int = 0
+    custom_mode: int = 0
 
 
 @router.post("/logs", response_model=response.BaseResponse[LogResponse])
@@ -138,7 +138,7 @@ async def wipe_user_stats(
         ctx.privileges,
         user_id,
         body.mode,
-        body.playstyle,
+        body.custom_mode,
     )
     response.unwrap(result)
 
