@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_limiter import FastAPILimiter
 from starlette.responses import Response
 
 from soumetsu_api import settings
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     initialise_storage(app)
     initialise_request_tracing(app)
     initialise_interruptions(app)
+    initialise_rate_limiting(app)
 
     create_routes(app)
 
@@ -148,3 +150,14 @@ def initialise_interruptions(app: FastAPI) -> None:
         return exc.response
 
     logger.debug("Initialised service interruption handler for app instance.")
+
+
+def initialise_rate_limiting(app: FastAPI) -> None:
+    @app.on_event("startup")
+    async def on_startup() -> None:
+        await FastAPILimiter.init(
+            app.state.redis,
+            prefix="soumetsuapi:rate_limit",
+        )
+
+    logger.debug("Initialised rate limiting for app instance.")
