@@ -52,10 +52,5 @@ MAX_BANNER_SIZE = int(
     os.environ.get("SOUMETSUAPI_MAX_BANNER_SIZE", 5 * 1024 * 1024),
 )  # 5MB
 
-# Rate limiting
-RATE_LIMIT_ENABLED = (
-    os.environ.get("SOUMETSUAPI_RATE_LIMIT_ENABLED", "true").lower() == "true"
-)
-
 # API versioning
 API_VERSION = "v2"
