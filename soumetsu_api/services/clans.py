@@ -11,7 +11,10 @@ from soumetsu_api.resources.clans import CLAN_PERM_MEMBER
 from soumetsu_api.resources.clans import CLAN_PERM_OWNER
 from soumetsu_api.resources.clans import ClanData
 from soumetsu_api.resources.clans import ClanMemberData
+from soumetsu_api.resources.clans import ClanMemberLeaderboardEntry
 from soumetsu_api.resources.clans import ClanMemberStats
+from soumetsu_api.resources.clans import ClanTopScore
+from soumetsu_api.resources.leaderboard import _calculate_level
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import crypto
@@ -93,7 +96,10 @@ class ClanStatsResult:
     total_pp: int
     average_pp: int
     total_ranked_score: int
+    total_total_score: int
     total_playcount: int
+    total_replays_watched: int
+    total_hits: int
     rank: int
 
 
@@ -114,6 +120,33 @@ class ClanLeaderboardEntryResult:
     chosen_mode: ClanModeStatsResult
     rank: int
     member_count: int
+
+
+@dataclass
+class ClanTopScoreResult:
+    id: int
+    player_id: int
+    username: str
+    pp: float
+    accuracy: float
+    mods: int
+    max_combo: int
+    beatmap_id: int
+    beatmapset_id: int
+    song_name: str
+    difficulty: float
+    ranked: int
+
+
+@dataclass
+class ClanMemberLeaderboardResult:
+    id: int
+    username: str
+    country: str
+    pp: int
+    accuracy: float
+    playcount: int
+    level: float
 
 
 def _compute_weighted_pp(member_stats: list[ClanMemberStats]) -> int:
@@ -392,14 +425,20 @@ async def get_clan_stats(
             total_pp=0,
             average_pp=0,
             total_ranked_score=0,
+            total_total_score=0,
             total_playcount=0,
+            total_replays_watched=0,
+            total_hits=0,
             rank=0,
         )
 
     total_pp = _compute_weighted_pp(member_stats)
     average_pp = sum(m.pp for m in member_stats) // len(member_stats)
     total_ranked_score = sum(m.ranked_score for m in member_stats)
+    total_total_score = sum(m.total_score for m in member_stats)
     total_playcount = sum(m.playcount for m in member_stats)
+    total_replays_watched = sum(m.replays_watched for m in member_stats)
+    total_hits = sum(m.total_hits for m in member_stats)
 
     # Compute rank by comparing against all clans
     all_clan_ids = await ctx.clans.get_all_clan_ids()
@@ -420,7 +459,10 @@ async def get_clan_stats(
         total_pp=total_pp,
         average_pp=average_pp,
         total_ranked_score=total_ranked_score,
+        total_total_score=total_total_score,
         total_playcount=total_playcount,
+        total_replays_watched=total_replays_watched,
+        total_hits=total_hits,
         rank=rank,
     )
 
@@ -463,6 +505,9 @@ async def get_clan_leaderboard(
         total_playcount = sum(m.playcount for m in member_stats)
         member_count = await ctx.clans.get_member_count(clan_id)
 
+        total_replays_watched = sum(m.replays_watched for m in member_stats)
+        total_hits = sum(m.total_hits for m in member_stats)
+
         clan_entries.append((
             weighted_pp,
             clan,
@@ -471,6 +516,8 @@ async def get_clan_leaderboard(
                 ranked_score=total_ranked_score,
                 total_score=total_score,
                 playcount=total_playcount,
+                replays_watched=total_replays_watched,
+                total_hits=total_hits,
             ),
             member_count,
             clan_id,
@@ -501,3 +548,76 @@ async def get_clan_leaderboard(
         )
 
     return results
+
+
+async def get_clan_top_scores(
+    ctx: AbstractContext,
+    clan_id: int,
+    mode: int = 0,
+    custom_mode: int = 0,
+    limit: int = 4,
+) -> ClanError.OnSuccess[list[ClanTopScoreResult]]:
+    if not is_valid_mode(mode):
+        return ClanError.INVALID_MODE
+
+    if not is_valid_custom_mode(custom_mode):
+        return ClanError.INVALID_CUSTOM_MODE
+
+    clan = await ctx.clans.get_by_id(clan_id)
+    if not clan:
+        return ClanError.CLAN_NOT_FOUND
+
+    if limit > 100:
+        limit = 100
+
+    scores = await ctx.clans.get_clan_top_scores(clan_id, mode, custom_mode, limit)
+
+    return [
+        ClanTopScoreResult(
+            id=s.id,
+            player_id=s.player_id,
+            username=s.username,
+            pp=s.pp,
+            accuracy=s.accuracy,
+            mods=s.mods,
+            max_combo=s.max_combo,
+            beatmap_id=s.beatmap_id,
+            beatmapset_id=s.beatmapset_id,
+            song_name=s.song_name,
+            difficulty=s.difficulty,
+            ranked=s.ranked,
+        )
+        for s in scores
+    ]
+
+
+async def get_clan_member_leaderboard(
+    ctx: AbstractContext,
+    clan_id: int,
+    mode: int = 0,
+    custom_mode: int = 0,
+) -> ClanError.OnSuccess[list[ClanMemberLeaderboardResult]]:
+    if not is_valid_mode(mode):
+        return ClanError.INVALID_MODE
+
+    if not is_valid_custom_mode(custom_mode):
+        return ClanError.INVALID_CUSTOM_MODE
+
+    clan = await ctx.clans.get_by_id(clan_id)
+    if not clan:
+        return ClanError.CLAN_NOT_FOUND
+
+    entries = await ctx.clans.get_clan_member_leaderboard(clan_id, mode, custom_mode)
+
+    return [
+        ClanMemberLeaderboardResult(
+            id=e.id,
+            username=e.username,
+            country=e.country,
+            pp=e.pp,
+            accuracy=e.accuracy,
+            playcount=e.playcount,
+            level=_calculate_level(e.total_score),
+        )
+        for e in entries
+    ]

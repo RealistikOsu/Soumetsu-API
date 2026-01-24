@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.constants import get_mode_suffix
 from soumetsu_api.constants import get_stats_table
+from soumetsu_api.resources.scores import SCORE_TABLES
 
 CLAN_PERM_MEMBER = 1
 CLAN_PERM_OWNER = 2
@@ -31,6 +32,35 @@ class ClanMemberStats(BaseModel):
     ranked_score: int
     total_score: int
     playcount: int
+    replays_watched: int
+    total_hits: int
+
+
+class ClanTopScore(BaseModel):
+    id: int
+    player_id: int
+    username: str
+    score: int
+    max_combo: int
+    full_combo: bool
+    mods: int
+    accuracy: float
+    pp: float
+    beatmap_id: int
+    beatmapset_id: int
+    song_name: str
+    difficulty: float
+    ranked: int
+
+
+class ClanMemberLeaderboardEntry(BaseModel):
+    id: int
+    username: str
+    country: str
+    pp: int
+    accuracy: float
+    playcount: int
+    total_score: int
 
 
 class ClansRepository:
@@ -271,7 +301,9 @@ class ClansRepository:
             SELECT s.pp_{suffix} as pp,
                    s.ranked_score_{suffix} as ranked_score,
                    s.total_score_{suffix} as total_score,
-                   s.playcount_{suffix} as playcount
+                   s.playcount_{suffix} as playcount,
+                   s.replays_watched_{suffix} as replays_watched,
+                   s.total_hits_{suffix} as total_hits
             FROM user_clans uc
             INNER JOIN {table} s ON uc.user = s.id
             INNER JOIN users u ON uc.user = u.id
@@ -288,3 +320,68 @@ class ClansRepository:
             {},
         )
         return [row["id"] for row in rows]
+
+    async def get_clan_top_scores(
+        self,
+        clan_id: int,
+        mode: int,
+        custom_mode: int,
+        limit: int = 4,
+    ) -> list[ClanTopScore]:
+        table = SCORE_TABLES[custom_mode]
+        diff_col = [
+            "difficulty_std",
+            "difficulty_taiko",
+            "difficulty_ctb",
+            "difficulty_mania",
+        ][mode]
+
+        query = f"""
+            SELECT s.id, s.userid as player_id, s.score, s.max_combo,
+                   s.full_combo, s.mods, s.accuracy, s.pp,
+                   b.beatmap_id, b.beatmapset_id, b.song_name,
+                   b.{diff_col} as difficulty, b.ranked,
+                   u.username
+            FROM {table} s
+            INNER JOIN user_clans uc ON s.userid = uc.user
+            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
+            INNER JOIN users u ON s.userid = u.id
+            WHERE uc.clan = :clan_id
+            AND s.play_mode = :mode
+            AND s.completed = 3
+            AND s.pp > 0
+            AND b.ranked = 2
+            AND u.privileges & 1 > 0
+            ORDER BY s.pp DESC
+            LIMIT :limit
+        """
+        rows = await self._mysql.fetch_all(
+            query,
+            {"clan_id": clan_id, "mode": mode, "limit": limit},
+        )
+        return [ClanTopScore(**row) for row in rows]
+
+    async def get_clan_member_leaderboard(
+        self,
+        clan_id: int,
+        mode: int,
+        custom_mode: int,
+    ) -> list[ClanMemberLeaderboardEntry]:
+        table = get_stats_table(custom_mode)
+        suffix = get_mode_suffix(mode)
+
+        query = f"""
+            SELECT s.id, u.username, u.country,
+                   s.pp_{suffix} as pp,
+                   s.avg_accuracy_{suffix} as accuracy,
+                   s.playcount_{suffix} as playcount,
+                   s.total_score_{suffix} as total_score
+            FROM user_clans uc
+            INNER JOIN {table} s ON uc.user = s.id
+            INNER JOIN users u ON uc.user = u.id
+            WHERE uc.clan = :clan_id
+            AND u.privileges & 1 > 0
+            ORDER BY s.pp_{suffix} DESC
+        """
+        rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})
+        return [ClanMemberLeaderboardEntry(**row) for row in rows]
