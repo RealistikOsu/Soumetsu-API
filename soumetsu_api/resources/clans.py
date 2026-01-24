@@ -3,6 +3,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.constants import get_mode_suffix
+from soumetsu_api.constants import get_stats_table
 
 CLAN_PERM_MEMBER = 1
 CLAN_PERM_OWNER = 2
@@ -22,6 +24,13 @@ class ClanMemberData(BaseModel):
     username: str
     country: str
     perms: int
+
+
+class ClanMemberStats(BaseModel):
+    pp: int
+    ranked_score: int
+    total_score: int
+    playcount: int
 
 
 class ClansRepository:
@@ -248,3 +257,34 @@ class ClansRepository:
             {"invite": invite},
         )
         return result
+
+    async def get_clan_member_stats(
+        self,
+        clan_id: int,
+        mode: int,
+        custom_mode: int,
+    ) -> list[ClanMemberStats]:
+        table = get_stats_table(custom_mode)
+        suffix = get_mode_suffix(mode)
+
+        query = f"""
+            SELECT s.pp_{suffix} as pp,
+                   s.ranked_score_{suffix} as ranked_score,
+                   s.total_score_{suffix} as total_score,
+                   s.playcount_{suffix} as playcount
+            FROM user_clans uc
+            INNER JOIN {table} s ON uc.user = s.id
+            INNER JOIN users u ON uc.user = u.id
+            WHERE uc.clan = :clan_id
+            AND u.privileges & 1 > 0
+            ORDER BY s.pp_{suffix} DESC
+        """
+        rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})
+        return [ClanMemberStats(**row) for row in rows]
+
+    async def get_all_clan_ids(self) -> list[int]:
+        rows = await self._mysql.fetch_all(
+            "SELECT id FROM clans ORDER BY id",
+            {},
+        )
+        return [row["id"] for row in rows]

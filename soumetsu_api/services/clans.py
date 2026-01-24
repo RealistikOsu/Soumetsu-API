@@ -5,10 +5,13 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.constants import is_valid_custom_mode
+from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.clans import CLAN_PERM_MEMBER
 from soumetsu_api.resources.clans import CLAN_PERM_OWNER
 from soumetsu_api.resources.clans import ClanData
 from soumetsu_api.resources.clans import ClanMemberData
+from soumetsu_api.resources.clans import ClanMemberStats
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import crypto
@@ -25,6 +28,8 @@ class ClanError(ServiceError):
     TAG_TAKEN = "tag_taken"
     CANNOT_KICK_OWNER = "cannot_kick_owner"
     USER_NOT_IN_CLAN = "user_not_in_clan"
+    INVALID_MODE = "invalid_mode"
+    INVALID_CUSTOM_MODE = "invalid_custom_mode"
 
     @override
     def service(self) -> str:
@@ -46,7 +51,7 @@ class ClanError(ServiceError):
                 | ClanError.TAG_TAKEN
             ):
                 return status.HTTP_409_CONFLICT
-            case ClanError.INVALID_INVITE:
+            case ClanError.INVALID_INVITE | ClanError.INVALID_MODE | ClanError.INVALID_CUSTOM_MODE:
                 return status.HTTP_400_BAD_REQUEST
             case _:
                 return status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -81,6 +86,41 @@ def _clan_to_result(c: ClanData, member_count: int) -> ClanResult:
         member_limit=c.member_limit,
         member_count=member_count,
     )
+
+
+@dataclass
+class ClanStatsResult:
+    total_pp: int
+    average_pp: int
+    total_ranked_score: int
+    total_playcount: int
+    rank: int
+
+
+@dataclass
+class ClanModeStatsResult:
+    pp: int
+    ranked_score: int
+    total_score: int
+    playcount: int
+
+
+@dataclass
+class ClanLeaderboardEntryResult:
+    id: int
+    name: str
+    tag: str
+    icon: str
+    chosen_mode: ClanModeStatsResult
+    rank: int
+    member_count: int
+
+
+def _compute_weighted_pp(member_stats: list[ClanMemberStats]) -> int:
+    total = 0.0
+    for i, m in enumerate(member_stats):
+        total += m.pp * (0.95**i)
+    return int(total)
 
 
 def _member_to_result(m: ClanMemberData) -> ClanMemberResult:
@@ -327,3 +367,137 @@ async def regenerate_invite(
     await ctx.clans.set_invite(clan_id, invite)
 
     return invite
+
+
+async def get_clan_stats(
+    ctx: AbstractContext,
+    clan_id: int,
+    mode: int = 0,
+    custom_mode: int = 0,
+) -> ClanError.OnSuccess[ClanStatsResult]:
+    if not is_valid_mode(mode):
+        return ClanError.INVALID_MODE
+
+    if not is_valid_custom_mode(custom_mode):
+        return ClanError.INVALID_CUSTOM_MODE
+
+    clan = await ctx.clans.get_by_id(clan_id)
+    if not clan:
+        return ClanError.CLAN_NOT_FOUND
+
+    member_stats = await ctx.clans.get_clan_member_stats(clan_id, mode, custom_mode)
+
+    if not member_stats:
+        return ClanStatsResult(
+            total_pp=0,
+            average_pp=0,
+            total_ranked_score=0,
+            total_playcount=0,
+            rank=0,
+        )
+
+    total_pp = _compute_weighted_pp(member_stats)
+    average_pp = sum(m.pp for m in member_stats) // len(member_stats)
+    total_ranked_score = sum(m.ranked_score for m in member_stats)
+    total_playcount = sum(m.playcount for m in member_stats)
+
+    # Compute rank by comparing against all clans
+    all_clan_ids = await ctx.clans.get_all_clan_ids()
+    rank = 1
+    for other_clan_id in all_clan_ids:
+        if other_clan_id == clan_id:
+            continue
+        other_stats = await ctx.clans.get_clan_member_stats(
+            other_clan_id,
+            mode,
+            custom_mode,
+        )
+        other_pp = _compute_weighted_pp(other_stats)
+        if other_pp > total_pp:
+            rank += 1
+
+    return ClanStatsResult(
+        total_pp=total_pp,
+        average_pp=average_pp,
+        total_ranked_score=total_ranked_score,
+        total_playcount=total_playcount,
+        rank=rank,
+    )
+
+
+async def get_clan_leaderboard(
+    ctx: AbstractContext,
+    mode: int = 0,
+    custom_mode: int = 0,
+    page: int = 1,
+    limit: int = 50,
+) -> ClanError.OnSuccess[list[ClanLeaderboardEntryResult]]:
+    if not is_valid_mode(mode):
+        return ClanError.INVALID_MODE
+
+    if not is_valid_custom_mode(custom_mode):
+        return ClanError.INVALID_CUSTOM_MODE
+
+    if limit > 100:
+        limit = 100
+
+    all_clan_ids = await ctx.clans.get_all_clan_ids()
+
+    clan_entries: list[tuple[int, ClanData, ClanMemberStats, int, int]] = []
+    for clan_id in all_clan_ids:
+        clan = await ctx.clans.get_by_id(clan_id)
+        if not clan:
+            continue
+
+        member_stats = await ctx.clans.get_clan_member_stats(
+            clan_id,
+            mode,
+            custom_mode,
+        )
+        if not member_stats:
+            continue
+
+        weighted_pp = _compute_weighted_pp(member_stats)
+        total_ranked_score = sum(m.ranked_score for m in member_stats)
+        total_score = sum(m.total_score for m in member_stats)
+        total_playcount = sum(m.playcount for m in member_stats)
+        member_count = await ctx.clans.get_member_count(clan_id)
+
+        clan_entries.append((
+            weighted_pp,
+            clan,
+            ClanMemberStats(
+                pp=weighted_pp,
+                ranked_score=total_ranked_score,
+                total_score=total_score,
+                playcount=total_playcount,
+            ),
+            member_count,
+            clan_id,
+        ))
+
+    clan_entries.sort(key=lambda x: x[0], reverse=True)
+
+    offset = (page - 1) * limit
+    paginated = clan_entries[offset : offset + limit]
+
+    results = []
+    for i, (_, clan, stats, member_count, _) in enumerate(paginated):
+        results.append(
+            ClanLeaderboardEntryResult(
+                id=clan.id,
+                name=clan.name,
+                tag=clan.tag,
+                icon=clan.icon,
+                chosen_mode=ClanModeStatsResult(
+                    pp=stats.pp,
+                    ranked_score=stats.ranked_score,
+                    total_score=stats.total_score,
+                    playcount=stats.playcount,
+                ),
+                rank=offset + i + 1,
+                member_count=member_count,
+            ),
+        )
+
+    return results

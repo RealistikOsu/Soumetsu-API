@@ -263,6 +263,16 @@ class LeaderboardRepository:
 
         return [FirstPlaceEntry(**row) for row in rows]
 
+    async def get_rank_for_pp(
+        self,
+        pp: int,
+        mode: int,
+        custom_mode: int,
+    ) -> int:
+        key = _build_leaderboard_key(custom_mode, mode)
+        count = await self._redis.zcount(key, f"({pp}", "+inf")
+        return count + 1
+
     async def get_total_ranked_users(
         self,
         mode: int,

@@ -49,6 +49,58 @@ class ScoreWithBeatmapResponse(ScoreResponse):
     beatmap: BeatmapInfo
 
 
+class ScoreTopPlayResponse(ScoreWithBeatmapResponse):
+    username: str
+
+
+@router.get(
+    "/scores/top",
+    response_model=response.BaseResponse[list[ScoreTopPlayResponse]],
+)
+async def get_top_plays(
+    ctx: RequiresContext,
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+) -> Response:
+    result = await scores.get_top_plays(ctx, mode, custom_mode, page, limit)
+    result = response.unwrap(result)
+
+    return response.create([
+        ScoreTopPlayResponse(
+            id=s.id,
+            beatmap_md5=s.beatmap_md5,
+            player_id=s.player_id,
+            score=s.score,
+            max_combo=s.max_combo,
+            full_combo=s.full_combo,
+            mods=s.mods,
+            count_300=s.count_300,
+            count_100=s.count_100,
+            count_50=s.count_50,
+            count_katus=s.count_katus,
+            count_gekis=s.count_gekis,
+            count_misses=s.count_misses,
+            submitted_at=s.submitted_at,
+            play_mode=s.play_mode,
+            completed=s.completed,
+            accuracy=s.accuracy,
+            pp=s.pp,
+            playtime=s.playtime,
+            beatmap=BeatmapInfo(
+                beatmap_id=s.beatmap_id,
+                beatmapset_id=s.beatmapset_id,
+                song_name=s.song_name,
+                difficulty=s.difficulty,
+                ranked=s.ranked,
+            ),
+            username=s.username,
+        )
+        for s in result
+    ])
+
+
 @router.get("/scores/{score_id}", response_model=response.BaseResponse[ScoreResponse])
 async def get_score(
     ctx: RequiresContext,

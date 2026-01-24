@@ -155,6 +155,21 @@ async def get_user_rank(
     return await ctx.leaderboard.get_user_global_rank(user_id, mode, custom_mode)
 
 
+async def get_rank_for_pp(
+    ctx: AbstractContext,
+    pp: int,
+    mode: int = 0,
+    custom_mode: int = 0,
+) -> LeaderboardError.OnSuccess[int]:
+    if not is_valid_mode(mode):
+        return LeaderboardError.INVALID_MODE
+
+    if not is_valid_custom_mode(custom_mode):
+        return LeaderboardError.INVALID_CUSTOM_MODE
+
+    return await ctx.leaderboard.get_rank_for_pp(pp, mode, custom_mode)
+
+
 async def get_total_ranked_users(
     ctx: AbstractContext,
     mode: int = 0,

@@ -49,6 +49,10 @@ class ScoreWithPlayer(ScoreData):
     player: ScorePlayer
 
 
+class ScoreTopPlay(ScoreWithBeatmap):
+    username: str
+
+
 class ScoresRepository:
     __slots__ = ("_mysql",)
 
@@ -268,6 +272,48 @@ class ScoresRepository:
             "DELETE FROM user_pinned WHERE userid = :player_id AND scoreid = :score_id",
             {"player_id": player_id, "score_id": score_id},
         )
+
+    async def list_top_plays(
+        self,
+        mode: int,
+        custom_mode: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ScoreTopPlay]:
+        table = self._get_table(custom_mode)
+        diff_col = [
+            "difficulty_std",
+            "difficulty_taiko",
+            "difficulty_ctb",
+            "difficulty_mania",
+        ][mode]
+
+        query = f"""
+            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
+                   s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
+                   s.100_count as count_100, s.50_count as count_50,
+                   s.katus_count as count_katus, s.gekis_count as count_gekis,
+                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
+                   s.completed, s.accuracy, s.pp, s.playtime,
+                   b.beatmap_id, b.beatmapset_id, b.song_name,
+                   b.{diff_col} as difficulty, b.ranked,
+                   u.username
+            FROM {table} s
+            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
+            INNER JOIN users u ON s.userid = u.id
+            WHERE s.play_mode = :mode
+            AND s.completed = 3
+            AND s.pp > 0
+            AND b.ranked = 2
+            AND u.privileges & 1 > 0
+            ORDER BY s.pp DESC
+            LIMIT :limit OFFSET :offset
+        """
+        rows = await self._mysql.fetch_all(
+            query,
+            {"mode": mode, "limit": limit, "offset": offset},
+        )
+        return [ScoreTopPlay(**row) for row in rows]
 
     async def list_beatmap_scores(
         self,

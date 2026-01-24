@@ -114,6 +114,19 @@ async def get_country(
     return response.create([_to_response(e) for e in result])
 
 
+@router.get("/rank", response_model=response.BaseResponse[RankResponse])
+async def get_rank_for_pp(
+    ctx: RequiresContext,
+    pp: int = Query(..., ge=0),
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
+) -> Response:
+    result = await leaderboard.get_rank_for_pp(ctx, pp, mode, custom_mode)
+    result = response.unwrap(result)
+
+    return response.create(RankResponse(rank=result))
+
+
 @router.get("/rank/{user_id}", response_model=response.BaseResponse[RankResponse])
 async def get_user_rank(
     ctx: RequiresContext,

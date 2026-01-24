@@ -9,6 +9,8 @@ from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
+from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import GameMode
 from soumetsu_api.services import clans
 
 router = APIRouter(prefix="/clans")
@@ -51,6 +53,31 @@ class InviteResponse(BaseModel):
     invite: str
 
 
+class ClanStatsResponse(BaseModel):
+    total_pp: int
+    average_pp: int
+    total_ranked_score: int
+    total_playcount: int
+    rank: int
+
+
+class ClanModeStatsResponse(BaseModel):
+    pp: int
+    ranked_score: int
+    total_score: int
+    playcount: int
+
+
+class ClanLeaderboardEntryResponse(BaseModel):
+    id: int
+    name: str
+    tag: str
+    icon: str
+    chosen_mode: ClanModeStatsResponse
+    rank: int
+    member_count: int
+
+
 def _to_response(c: clans.ClanResult) -> ClanResponse:
     return ClanResponse(
         id=c.id,
@@ -85,6 +112,39 @@ async def search_clans(
     return response.create([_to_response(c) for c in result])
 
 
+@router.get(
+    "/leaderboard",
+    response_model=response.BaseResponse[list[ClanLeaderboardEntryResponse]],
+)
+async def get_clan_leaderboard(
+    ctx: RequiresContext,
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+) -> Response:
+    result = await clans.get_clan_leaderboard(ctx, mode, custom_mode, page, limit)
+    result = response.unwrap(result)
+
+    return response.create([
+        ClanLeaderboardEntryResponse(
+            id=e.id,
+            name=e.name,
+            tag=e.tag,
+            icon=e.icon,
+            chosen_mode=ClanModeStatsResponse(
+                pp=e.chosen_mode.pp,
+                ranked_score=e.chosen_mode.ranked_score,
+                total_score=e.chosen_mode.total_score,
+                playcount=e.chosen_mode.playcount,
+            ),
+            rank=e.rank,
+            member_count=e.member_count,
+        )
+        for e in result
+    ])
+
+
 @router.post("/", response_model=response.BaseResponse[ClanResponse])
 async def create_clan(
     ctx: RequiresAuthTransaction,
@@ -111,6 +171,30 @@ async def get_clan(
     result = response.unwrap(result)
 
     return response.create(_to_response(result))
+
+
+@router.get(
+    "/{clan_id}/stats",
+    response_model=response.BaseResponse[ClanStatsResponse],
+)
+async def get_clan_stats(
+    ctx: RequiresContext,
+    clan_id: int,
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
+) -> Response:
+    result = await clans.get_clan_stats(ctx, clan_id, mode, custom_mode)
+    result = response.unwrap(result)
+
+    return response.create(
+        ClanStatsResponse(
+            total_pp=result.total_pp,
+            average_pp=result.average_pp,
+            total_ranked_score=result.total_ranked_score,
+            total_playcount=result.total_playcount,
+            rank=result.rank,
+        ),
+    )
 
 
 @router.put("/{clan_id}", response_model=response.BaseResponse[ClanResponse])
