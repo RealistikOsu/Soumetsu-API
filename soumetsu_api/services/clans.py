@@ -11,9 +11,7 @@ from soumetsu_api.resources.clans import CLAN_PERM_MEMBER
 from soumetsu_api.resources.clans import CLAN_PERM_OWNER
 from soumetsu_api.resources.clans import ClanData
 from soumetsu_api.resources.clans import ClanMemberData
-from soumetsu_api.resources.clans import ClanMemberLeaderboardEntry
 from soumetsu_api.resources.clans import ClanMemberStats
-from soumetsu_api.resources.clans import ClanTopScore
 from soumetsu_api.resources.leaderboard import _calculate_level
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -54,7 +52,11 @@ class ClanError(ServiceError):
                 | ClanError.TAG_TAKEN
             ):
                 return status.HTTP_409_CONFLICT
-            case ClanError.INVALID_INVITE | ClanError.INVALID_MODE | ClanError.INVALID_CUSTOM_MODE:
+            case (
+                ClanError.INVALID_INVITE
+                | ClanError.INVALID_MODE
+                | ClanError.INVALID_CUSTOM_MODE
+            ):
                 return status.HTTP_400_BAD_REQUEST
             case _:
                 return status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -508,20 +510,22 @@ async def get_clan_leaderboard(
         total_replays_watched = sum(m.replays_watched for m in member_stats)
         total_hits = sum(m.total_hits for m in member_stats)
 
-        clan_entries.append((
-            weighted_pp,
-            clan,
-            ClanMemberStats(
-                pp=weighted_pp,
-                ranked_score=total_ranked_score,
-                total_score=total_score,
-                playcount=total_playcount,
-                replays_watched=total_replays_watched,
-                total_hits=total_hits,
+        clan_entries.append(
+            (
+                weighted_pp,
+                clan,
+                ClanMemberStats(
+                    pp=weighted_pp,
+                    ranked_score=total_ranked_score,
+                    total_score=total_score,
+                    playcount=total_playcount,
+                    replays_watched=total_replays_watched,
+                    total_hits=total_hits,
+                ),
+                member_count,
+                clan_id,
             ),
-            member_count,
-            clan_id,
-        ))
+        )
 
     clan_entries.sort(key=lambda x: x[0], reverse=True)
 

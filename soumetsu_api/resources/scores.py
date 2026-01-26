@@ -342,7 +342,8 @@ class ScoresRepository:
 
             for mode in modes:
                 diff_col = diff_cols[mode]
-                mode_queries.append(f"""
+                mode_queries.append(
+                    f"""
                     (SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
                             s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
                             s.100_count as count_100, s.50_count as count_50,
@@ -358,7 +359,8 @@ class ScoresRepository:
                      WHERE s.play_mode = {mode} AND s.completed = 3 AND s.pp > 0
                        AND b.ranked = 2 AND u.privileges & 1 > 0
                      ORDER BY s.pp DESC LIMIT 1)
-                """)
+                """,
+                )
 
         query = " UNION ALL ".join(mode_queries) + " ORDER BY pp DESC"
         rows = await self._mysql.fetch_all(query, {})

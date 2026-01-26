@@ -158,23 +158,25 @@ async def get_clan_leaderboard(
     result = await clans.get_clan_leaderboard(ctx, mode, custom_mode, page, limit)
     result = response.unwrap(result)
 
-    return response.create([
-        ClanLeaderboardEntryResponse(
-            id=e.id,
-            name=e.name,
-            tag=e.tag,
-            icon=e.icon,
-            chosen_mode=ClanModeStatsResponse(
-                pp=e.chosen_mode.pp,
-                ranked_score=e.chosen_mode.ranked_score,
-                total_score=e.chosen_mode.total_score,
-                playcount=e.chosen_mode.playcount,
-            ),
-            rank=e.rank,
-            member_count=e.member_count,
-        )
-        for e in result
-    ])
+    return response.create(
+        [
+            ClanLeaderboardEntryResponse(
+                id=e.id,
+                name=e.name,
+                tag=e.tag,
+                icon=e.icon,
+                chosen_mode=ClanModeStatsResponse(
+                    pp=e.chosen_mode.pp,
+                    ranked_score=e.chosen_mode.ranked_score,
+                    total_score=e.chosen_mode.total_score,
+                    playcount=e.chosen_mode.playcount,
+                ),
+                rank=e.rank,
+                member_count=e.member_count,
+            )
+            for e in result
+        ],
+    )
 
 
 @router.post("/", response_model=response.BaseResponse[ClanResponse])
@@ -246,25 +248,27 @@ async def get_clan_top_scores(
     result = await clans.get_clan_top_scores(ctx, clan_id, mode, custom_mode, limit)
     result = response.unwrap(result)
 
-    return response.create([
-        ClanTopScoreResponse(
-            id=s.id,
-            player_id=s.player_id,
-            username=s.username,
-            pp=s.pp,
-            accuracy=s.accuracy,
-            mods=s.mods,
-            max_combo=s.max_combo,
-            beatmap=ClanTopScoreBeatmapResponse(
-                beatmap_id=s.beatmap_id,
-                beatmapset_id=s.beatmapset_id,
-                song_name=s.song_name,
-                difficulty=s.difficulty,
-                ranked=s.ranked,
-            ),
-        )
-        for s in result
-    ])
+    return response.create(
+        [
+            ClanTopScoreResponse(
+                id=s.id,
+                player_id=s.player_id,
+                username=s.username,
+                pp=s.pp,
+                accuracy=s.accuracy,
+                mods=s.mods,
+                max_combo=s.max_combo,
+                beatmap=ClanTopScoreBeatmapResponse(
+                    beatmap_id=s.beatmap_id,
+                    beatmapset_id=s.beatmapset_id,
+                    song_name=s.song_name,
+                    difficulty=s.difficulty,
+                    ranked=s.ranked,
+                ),
+            )
+            for s in result
+        ],
+    )
 
 
 @router.get(
@@ -280,18 +284,20 @@ async def get_clan_member_leaderboard(
     result = await clans.get_clan_member_leaderboard(ctx, clan_id, mode, custom_mode)
     result = response.unwrap(result)
 
-    return response.create([
-        ClanMemberLeaderboardResponse(
-            id=e.id,
-            username=e.username,
-            country=e.country,
-            pp=e.pp,
-            accuracy=e.accuracy,
-            playcount=e.playcount,
-            level=e.level,
-        )
-        for e in result
-    ])
+    return response.create(
+        [
+            ClanMemberLeaderboardResponse(
+                id=e.id,
+                username=e.username,
+                country=e.country,
+                pp=e.pp,
+                accuracy=e.accuracy,
+                playcount=e.playcount,
+                level=e.level,
+            )
+            for e in result
+        ],
+    )
 
 
 @router.put("/{clan_id}", response_model=response.BaseResponse[ClanResponse])
