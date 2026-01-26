@@ -9,6 +9,7 @@ from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.scores import ScoreData
 from soumetsu_api.resources.scores import ScoreTopPlay
+from soumetsu_api.resources.scores import ScoreTopPlayWithMode
 from soumetsu_api.resources.scores import ScoreWithBeatmap
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -84,6 +85,11 @@ class ScoreWithBeatmapResult(ScoreResult):
 @dataclass
 class ScoreTopPlayResult(ScoreWithBeatmapResult):
     username: str = ""
+
+
+@dataclass
+class ScoreTopPlayWithModeResult(ScoreTopPlayResult):
+    custom_mode: int = 0
 
 
 def _score_to_result(score: ScoreData) -> ScoreResult:
@@ -320,6 +326,46 @@ async def get_top_plays(
 
     top_scores = await ctx.scores.list_top_plays(mode, custom_mode, limit, offset)
     return [_top_play_to_result(s) for s in top_scores]
+
+
+def _top_play_with_mode_to_result(
+    score: ScoreTopPlayWithMode,
+) -> ScoreTopPlayWithModeResult:
+    return ScoreTopPlayWithModeResult(
+        id=score.id,
+        beatmap_md5=score.beatmap_md5,
+        player_id=score.player_id,
+        score=score.score,
+        max_combo=score.max_combo,
+        full_combo=score.full_combo,
+        mods=score.mods,
+        count_300=score.count_300,
+        count_100=score.count_100,
+        count_50=score.count_50,
+        count_katus=score.count_katus,
+        count_gekis=score.count_gekis,
+        count_misses=score.count_misses,
+        submitted_at=score.submitted_at,
+        play_mode=score.play_mode,
+        completed=score.completed,
+        accuracy=score.accuracy,
+        pp=score.pp,
+        playtime=score.playtime,
+        beatmap_id=score.beatmap_id,
+        beatmapset_id=score.beatmapset_id,
+        song_name=score.song_name,
+        difficulty=score.difficulty,
+        ranked=score.ranked,
+        username=score.username,
+        custom_mode=score.custom_mode,
+    )
+
+
+async def get_top_plays_all_modes(
+    ctx: AbstractContext,
+) -> list[ScoreTopPlayWithModeResult]:
+    top_scores = await ctx.scores.list_top_plays_all_modes()
+    return [_top_play_with_mode_to_result(s) for s in top_scores]
 
 
 async def pin_score(

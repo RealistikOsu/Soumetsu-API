@@ -274,22 +274,37 @@ class UserSettings:
     prefer_relax: int
     play_style: int
     show_country: bool
+    email: str
+    custom_badge_icon: str
+    custom_badge_name: str
+    show_custom_badge: bool
+    can_custom_badge: bool
+    disabled_comments: bool
 
 
 async def get_settings(
     ctx: AbstractContext,
     user_id: int,
 ) -> UserError.OnSuccess[UserSettings]:
-    settings = await ctx.user_stats.get_settings(user_id)
-    if not settings:
+    stats_settings = await ctx.user_stats.get_settings(user_id)
+    if not stats_settings:
         return UserError.USER_NOT_FOUND
 
+    email = await ctx.users.get_email(user_id) or ""
+    disabled_comments = await ctx.users.get_disabled_comments(user_id)
+
     return UserSettings(
-        username_aka=settings.username_aka,
-        favourite_mode=settings.favourite_mode,
-        prefer_relax=settings.prefer_relax,
-        play_style=settings.play_style,
-        show_country=settings.show_country,
+        username_aka=stats_settings.username_aka,
+        favourite_mode=stats_settings.favourite_mode,
+        prefer_relax=stats_settings.prefer_relax,
+        play_style=stats_settings.play_style,
+        show_country=stats_settings.show_country,
+        email=email,
+        custom_badge_icon=stats_settings.custom_badge_icon,
+        custom_badge_name=stats_settings.custom_badge_name,
+        show_custom_badge=stats_settings.show_custom_badge,
+        can_custom_badge=stats_settings.can_custom_badge,
+        disabled_comments=disabled_comments,
     )
 
 
@@ -301,6 +316,10 @@ async def update_settings(
     prefer_relax: int | None = None,
     play_style: int | None = None,
     show_country: bool | None = None,
+    custom_badge_icon: str | None = None,
+    custom_badge_name: str | None = None,
+    show_custom_badge: bool | None = None,
+    disabled_comments: bool | None = None,
 ) -> UserError.OnSuccess[None]:
     await ctx.user_stats.update_settings(
         user_id,
@@ -309,7 +328,14 @@ async def update_settings(
         prefer_relax=prefer_relax,
         play_style=play_style,
         show_country=show_country,
+        custom_badge_icon=custom_badge_icon,
+        custom_badge_name=custom_badge_name,
+        show_custom_badge=show_custom_badge,
     )
+
+    if disabled_comments is not None:
+        await ctx.users.update_disabled_comments(user_id, disabled_comments)
+
     return None
 
 

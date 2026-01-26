@@ -245,3 +245,16 @@ class UserRepository:
             "UPDATE users SET email = :email WHERE id = :id",
             {"email": email, "id": user_id},
         )
+
+    async def get_disabled_comments(self, user_id: int) -> bool:
+        result = await self._mysql.fetch_val(
+            "SELECT disabled_comments FROM users WHERE id = :id",
+            {"id": user_id},
+        )
+        return bool(result) if result is not None else False
+
+    async def update_disabled_comments(self, user_id: int, disabled: bool) -> None:
+        await self._mysql.execute(
+            "UPDATE users SET disabled_comments = :disabled WHERE id = :id",
+            {"disabled": int(disabled), "id": user_id},
+        )

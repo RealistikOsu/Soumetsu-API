@@ -77,12 +77,28 @@ class UserCardResponse(BaseModel):
     is_online: bool
 
 
+class CustomBadgeResponse(BaseModel):
+    show: bool
+    icon: str
+    name: str
+    can_custom_badge: bool
+
+
 class UserSettingsResponse(BaseModel):
     username_aka: str
     favourite_mode: int
     prefer_relax: int
     play_style: int
     show_country: bool
+    email: str
+    custom_badge: CustomBadgeResponse
+    disabled_comments: bool
+
+
+class UpdateCustomBadgeRequest(BaseModel):
+    show: bool | None = None
+    icon: str | None = None
+    name: str | None = None
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -91,6 +107,8 @@ class UpdateSettingsRequest(BaseModel):
     prefer_relax: int | None = None
     play_style: int | None = None
     show_country: bool | None = None
+    custom_badge: UpdateCustomBadgeRequest | None = None
+    disabled_comments: bool | None = None
 
 
 class UserpageResponse(BaseModel):
@@ -209,6 +227,14 @@ async def get_settings(ctx: RequiresAuth) -> Response:
             prefer_relax=result.prefer_relax,
             play_style=result.play_style,
             show_country=result.show_country,
+            email=result.email,
+            custom_badge=CustomBadgeResponse(
+                show=result.show_custom_badge,
+                icon=result.custom_badge_icon,
+                name=result.custom_badge_name,
+                can_custom_badge=result.can_custom_badge,
+            ),
+            disabled_comments=result.disabled_comments,
         ),
     )
 
@@ -226,6 +252,10 @@ async def update_settings(
         prefer_relax=body.prefer_relax,
         play_style=body.play_style,
         show_country=body.show_country,
+        custom_badge_icon=body.custom_badge.icon if body.custom_badge else None,
+        custom_badge_name=body.custom_badge.name if body.custom_badge else None,
+        show_custom_badge=body.custom_badge.show if body.custom_badge else None,
+        disabled_comments=body.disabled_comments,
     )
     response.unwrap(result)
 

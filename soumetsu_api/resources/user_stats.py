@@ -26,6 +26,10 @@ class UserSettingsData(BaseModel):
     prefer_relax: int
     play_style: int
     show_country: bool
+    custom_badge_icon: str
+    custom_badge_name: str
+    show_custom_badge: bool
+    can_custom_badge: bool
 
 
 class UserStatsRepository:
@@ -118,7 +122,8 @@ class UserStatsRepository:
     async def get_settings(self, user_id: int) -> UserSettingsData | None:
         row = await self._mysql.fetch_one(
             """SELECT username_aka, favourite_mode, prefer_relax,
-                      play_style, show_country
+                      play_style, show_country, custom_badge_icon,
+                      custom_badge_name, show_custom_badge, can_custom_badge
                FROM users_stats WHERE id = :user_id""",
             {"user_id": user_id},
         )
@@ -131,6 +136,10 @@ class UserStatsRepository:
             prefer_relax=row["prefer_relax"],
             play_style=row["play_style"],
             show_country=bool(row["show_country"]),
+            custom_badge_icon=row["custom_badge_icon"] or "",
+            custom_badge_name=row["custom_badge_name"] or "",
+            show_custom_badge=bool(row["show_custom_badge"]),
+            can_custom_badge=bool(row["can_custom_badge"]),
         )
 
     async def update_settings(
@@ -141,6 +150,9 @@ class UserStatsRepository:
         prefer_relax: int | None = None,
         play_style: int | None = None,
         show_country: bool | None = None,
+        custom_badge_icon: str | None = None,
+        custom_badge_name: str | None = None,
+        show_custom_badge: bool | None = None,
     ) -> None:
         updates = []
         params: dict[str, int | str | bool] = {"user_id": user_id}
@@ -164,6 +176,18 @@ class UserStatsRepository:
         if show_country is not None:
             updates.append("show_country = :show_country")
             params["show_country"] = int(show_country)
+
+        if custom_badge_icon is not None:
+            updates.append("custom_badge_icon = :custom_badge_icon")
+            params["custom_badge_icon"] = custom_badge_icon
+
+        if custom_badge_name is not None:
+            updates.append("custom_badge_name = :custom_badge_name")
+            params["custom_badge_name"] = custom_badge_name
+
+        if show_custom_badge is not None:
+            updates.append("show_custom_badge = :show_custom_badge")
+            params["show_custom_badge"] = int(show_custom_badge)
 
         if not updates:
             return

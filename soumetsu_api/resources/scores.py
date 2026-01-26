@@ -53,6 +53,10 @@ class ScoreTopPlay(ScoreWithBeatmap):
     username: str
 
 
+class ScoreTopPlayWithMode(ScoreTopPlay):
+    custom_mode: int = 0
+
+
 class ScoresRepository:
     __slots__ = ("_mysql",)
 
@@ -314,6 +318,51 @@ class ScoresRepository:
             {"mode": mode, "limit": limit, "offset": offset},
         )
         return [ScoreTopPlay(**row) for row in rows]
+
+    async def list_top_plays_all_modes(self) -> list[ScoreTopPlayWithMode]:
+        # Valid combinations:
+        # custom_mode 0 (vanilla): modes 0,1,2,3 (std, taiko, ctb, mania)
+        # custom_mode 1 (relax): modes 0,1,2 (std, taiko, ctb)
+        # custom_mode 2 (autopilot): mode 0 only (std)
+        diff_cols = [
+            "difficulty_std",
+            "difficulty_taiko",
+            "difficulty_ctb",
+            "difficulty_mania",
+        ]
+
+        mode_queries = []
+        for custom_mode, table in enumerate(SCORE_TABLES):
+            if custom_mode == 0:
+                modes = [0, 1, 2, 3]
+            elif custom_mode == 1:
+                modes = [0, 1, 2]
+            else:
+                modes = [0]
+
+            for mode in modes:
+                diff_col = diff_cols[mode]
+                mode_queries.append(f"""
+                    (SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
+                            s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
+                            s.100_count as count_100, s.50_count as count_50,
+                            s.katus_count as count_katus, s.gekis_count as count_gekis,
+                            s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
+                            s.completed, s.accuracy, s.pp, s.playtime,
+                            b.beatmap_id, b.beatmapset_id, b.song_name,
+                            b.{diff_col} as difficulty, b.ranked,
+                            u.username, {custom_mode} as custom_mode
+                     FROM {table} s
+                     INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
+                     INNER JOIN users u ON s.userid = u.id
+                     WHERE s.play_mode = {mode} AND s.completed = 3 AND s.pp > 0
+                       AND b.ranked = 2 AND u.privileges & 1 > 0
+                     ORDER BY s.pp DESC LIMIT 1)
+                """)
+
+        query = " UNION ALL ".join(mode_queries) + " ORDER BY pp DESC"
+        rows = await self._mysql.fetch_all(query, {})
+        return [ScoreTopPlayWithMode(**row) for row in rows]
 
     async def list_beatmap_scores(
         self,
