@@ -7,8 +7,6 @@ from soumetsu_api.adapters.redis import RedisClient
 from soumetsu_api.constants import get_mode_suffix
 from soumetsu_api.constants import get_stats_table
 
-LEADERBOARD_KEY_PREFIX = "leaderboard"
-
 
 class LeaderboardModeStats(BaseModel):
     pp: int
@@ -44,12 +42,17 @@ def _build_leaderboard_key(
     country: str | None = None,
 ) -> str:
     suffix = get_mode_suffix(mode)
-    custom_mode_names = {0: "vanilla", 1: "relax", 2: "autopilot"}
-    custom_mode_name = custom_mode_names.get(custom_mode, "vanilla")
+
+    if custom_mode == 1:
+        base_key = f"ripple:leaderboard_relax:{suffix}"
+    elif custom_mode == 2:
+        base_key = f"ripple:leaderboard_ap:{suffix}"
+    else:
+        base_key = f"ripple:leaderboard:{suffix}"
 
     if country:
-        return f"{LEADERBOARD_KEY_PREFIX}:{custom_mode_name}:{suffix}:{country.lower()}"
-    return f"{LEADERBOARD_KEY_PREFIX}:{custom_mode_name}:{suffix}"
+        return f"{base_key}:{country.lower()}"
+    return base_key
 
 
 def _calculate_level(total_score: int) -> float:
