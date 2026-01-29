@@ -108,6 +108,10 @@ class UserCard:
     global_rank: int
     country_rank: int
     is_online: bool
+    pp: int
+    accuracy: float
+    mode: int
+    custom_mode: int
 
 
 async def get_card(
@@ -122,9 +126,9 @@ async def get_card(
     if privileges.is_restricted(user_privs):
         return UserError.USER_RESTRICTED
 
-    settings = await ctx.user_stats.get_settings(user_id)
-    mode = settings.favourite_mode if settings else 0
-    custom_mode = settings.prefer_relax if settings else 0
+    pref = await ctx.user_stats.get_preferred_mode_stats(user_id)
+    mode = pref.mode if pref else 0
+    custom_mode = pref.custom_mode if pref else 0
 
     global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, custom_mode)
     country_rank = await ctx.leaderboard.get_user_country_rank(
@@ -142,6 +146,10 @@ async def get_card(
         global_rank=global_rank,
         country_rank=country_rank,
         is_online=False,  # TODO: check bancho presence
+        pp=pref.pp if pref else 0,
+        accuracy=pref.accuracy if pref else 0.0,
+        mode=mode,
+        custom_mode=custom_mode,
     )
 
 

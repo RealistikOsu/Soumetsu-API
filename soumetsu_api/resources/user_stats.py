@@ -32,6 +32,14 @@ class UserSettingsData(BaseModel):
     can_custom_badge: bool
 
 
+class PreferredModeStats(BaseModel):
+    mode: int
+    custom_mode: int
+    pp: int
+    accuracy: float
+    playcount: int
+
+
 class UserStatsRepository:
     __slots__ = ("_mysql",)
 
@@ -206,4 +214,60 @@ class UserStatsRepository:
         await self._mysql.execute(
             "UPDATE users_stats SET userpage_content = :content WHERE id = :user_id",
             {"user_id": user_id, "content": content},
+        )
+
+    async def get_preferred_mode_stats(self, user_id: int) -> PreferredModeStats | None:
+        """Find the mode combination with highest playcount using a single query."""
+        query = """
+            SELECT
+                vn.playcount_std as vn_std_pc, vn.playcount_taiko as vn_taiko_pc,
+                vn.playcount_ctb as vn_ctb_pc, vn.playcount_mania as vn_mania_pc,
+                vn.pp_std as vn_std_pp, vn.pp_taiko as vn_taiko_pp,
+                vn.pp_ctb as vn_ctb_pp, vn.pp_mania as vn_mania_pp,
+                vn.avg_accuracy_std as vn_std_acc, vn.avg_accuracy_taiko as vn_taiko_acc,
+                vn.avg_accuracy_ctb as vn_ctb_acc, vn.avg_accuracy_mania as vn_mania_acc,
+
+                rx.playcount_std as rx_std_pc, rx.playcount_taiko as rx_taiko_pc,
+                rx.playcount_ctb as rx_ctb_pc,
+                rx.pp_std as rx_std_pp, rx.pp_taiko as rx_taiko_pp,
+                rx.pp_ctb as rx_ctb_pp,
+                rx.avg_accuracy_std as rx_std_acc, rx.avg_accuracy_taiko as rx_taiko_acc,
+                rx.avg_accuracy_ctb as rx_ctb_acc,
+
+                ap.playcount_std as ap_std_pc,
+                ap.pp_std as ap_std_pp,
+                ap.avg_accuracy_std as ap_std_acc
+            FROM users_stats vn
+            LEFT JOIN rx_stats rx ON vn.id = rx.id
+            LEFT JOIN ap_stats ap ON vn.id = ap.id
+            WHERE vn.id = :user_id
+        """
+        row = await self._mysql.fetch_one(query, {"user_id": user_id})
+        if not row:
+            return None
+
+        # All 8 valid mode combinations: (custom_mode, mode, pc_key, pp_key, acc_key)
+        combinations = [
+            (0, 0, "vn_std_pc", "vn_std_pp", "vn_std_acc"),
+            (0, 1, "vn_taiko_pc", "vn_taiko_pp", "vn_taiko_acc"),
+            (0, 2, "vn_ctb_pc", "vn_ctb_pp", "vn_ctb_acc"),
+            (0, 3, "vn_mania_pc", "vn_mania_pp", "vn_mania_acc"),
+            (1, 0, "rx_std_pc", "rx_std_pp", "rx_std_acc"),
+            (1, 1, "rx_taiko_pc", "rx_taiko_pp", "rx_taiko_acc"),
+            (1, 2, "rx_ctb_pc", "rx_ctb_pp", "rx_ctb_acc"),
+            (2, 0, "ap_std_pc", "ap_std_pp", "ap_std_acc"),
+        ]
+
+        best = (0, 0, 0, 0.0, 0)  # (custom_mode, mode, pp, acc, playcount)
+        for cm, m, pc_key, pp_key, acc_key in combinations:
+            pc = row[pc_key] or 0
+            if pc > best[4]:
+                best = (cm, m, row[pp_key] or 0, row[acc_key] or 0.0, pc)
+
+        return PreferredModeStats(
+            custom_mode=best[0],
+            mode=best[1],
+            pp=best[2],
+            accuracy=best[3],
+            playcount=best[4],
         )

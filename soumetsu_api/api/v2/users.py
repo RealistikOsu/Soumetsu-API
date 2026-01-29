@@ -75,6 +75,10 @@ class UserCardResponse(BaseModel):
     global_rank: int
     country_rank: int
     is_online: bool
+    pp: int
+    accuracy: float
+    mode: int
+    custom_mode: int
 
 
 class CustomBadgeResponse(BaseModel):
@@ -383,6 +387,10 @@ async def get_user_card(
             global_rank=result.global_rank,
             country_rank=result.country_rank,
             is_online=result.is_online,
+            pp=result.pp,
+            accuracy=result.accuracy,
+            mode=result.mode,
+            custom_mode=result.custom_mode,
         ),
     )
 
