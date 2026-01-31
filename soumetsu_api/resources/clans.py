@@ -385,3 +385,7 @@ class ClansRepository:
         """
         rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})
         return [ClanMemberLeaderboardEntry(**row) for row in rows]
+
+    async def get_total_count(self) -> int:
+        result = await self._mysql.fetch_val("SELECT COUNT(*) FROM clans")
+        return result or 0

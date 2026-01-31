@@ -161,9 +161,15 @@ async def _require_auth_transaction(
 
     pool: MySQLPoolAdapter = request.app.state.mysql
     redis_client: RedisClient = request.app.state.redis
+    storage_adapter: StorageAdapter = request.app.state.storage
 
     async with pool.transaction() as transaction:
-        yield AuthenticatedTransactionContext(transaction, redis_client, session)
+        yield AuthenticatedTransactionContext(
+            transaction,
+            redis_client,
+            storage_adapter,
+            session,
+        )
 
 
 RequiresContext = Annotated[HTTPContext, Depends(HTTPContext)]

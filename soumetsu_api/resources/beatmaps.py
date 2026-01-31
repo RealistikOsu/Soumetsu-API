@@ -46,6 +46,27 @@ class RankRequestData(BaseModel):
     blacklisted: bool
 
 
+class RankRequestWithBeatmapData(BaseModel):
+    request_id: int
+    request_type: str
+    requested_at: int
+    beatmap_id: int
+    beatmapset_id: int
+    song_name: str
+    ar: float
+    od: float
+    mode: int
+    difficulty_std: float
+    difficulty_taiko: float
+    difficulty_ctb: float
+    difficulty_mania: float
+    max_combo: int
+    hit_length: int
+    bpm: int
+    ranked: int
+    mapper_id: int
+
+
 class BeatmapsRepository:
     __slots__ = ("_mysql",)
 
@@ -303,3 +324,46 @@ class BeatmapsRepository:
             {"requester_id": requester_id, "today_start": today_start},
         )
         return result
+
+    async def list_pending_rank_requests(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[RankRequestWithBeatmapData]:
+        rows = await self._mysql.fetch_all(
+            """SELECT
+                r.id as request_id,
+                r.type as request_type,
+                r.time as requested_at,
+                b.beatmap_id,
+                b.beatmapset_id,
+                b.song_name,
+                b.ar,
+                b.od,
+                b.mode,
+                b.difficulty_std,
+                b.difficulty_taiko,
+                b.difficulty_ctb,
+                b.difficulty_mania,
+                b.max_combo,
+                b.hit_length,
+                b.bpm,
+                b.ranked,
+                b.mapper_id
+            FROM rank_requests r
+            INNER JOIN beatmaps b ON (
+                (r.type = 'b' AND b.beatmap_id = r.bid)
+                OR (r.type = 's' AND b.beatmapset_id = r.bid)
+            )
+            WHERE r.blacklisted = 0
+            ORDER BY r.time DESC, r.id DESC, b.difficulty_std ASC
+            LIMIT :limit OFFSET :offset""",
+            {"limit": limit, "offset": offset},
+        )
+        return [RankRequestWithBeatmapData(**row) for row in rows]
+
+    async def count_pending_rank_requests(self) -> int:
+        result = await self._mysql.fetch_val(
+            "SELECT COUNT(*) FROM rank_requests WHERE blacklisted = 0",
+        )
+        return result or 0

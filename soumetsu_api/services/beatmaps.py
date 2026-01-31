@@ -198,8 +198,44 @@ async def get_user_most_played(
     ]
 
 
-DAILY_RANK_REQUEST_LIMIT = 2
+DAILY_RANK_REQUEST_LIMIT = 5
 DAILY_GLOBAL_REQUEST_LIMIT = 50
+
+
+@dataclass
+class RankRequestBeatmapInfo:
+    beatmap_id: int
+    beatmapset_id: int
+    song_name: str
+    ar: float
+    od: float
+    mode: int
+    difficulty_std: float
+    difficulty_taiko: float
+    difficulty_ctb: float
+    difficulty_mania: float
+    max_combo: int
+    hit_length: int
+    bpm: int
+    ranked: int
+    mapper_id: int
+
+
+@dataclass
+class RankRequestListItem:
+    request_id: int
+    request_type: str
+    requested_at: int
+    beatmaps: list[RankRequestBeatmapInfo]
+
+
+@dataclass
+class RankRequestListResult:
+    requests: list[RankRequestListItem]
+    total: int
+    page: int
+    limit: int
+    has_more: bool
 
 
 @dataclass
@@ -261,26 +297,56 @@ async def get_rank_request_status(
     )
 
 
-BEATMAP_URL_PATTERNS = [
-    re.compile(r"osu\.ppy\.sh/beatmapsets/(\d+)(?:#\w+/(\d+))?"),
-    re.compile(r"osu\.ppy\.sh/b/(\d+)"),
-    re.compile(r"osu\.ppy\.sh/beatmaps/(\d+)"),
-    re.compile(r"osu\.ppy\.sh/s/(\d+)"),
-    re.compile(r"osu\.ussr\.pl/beatmapsets/(\d+)(?:#\w+/(\d+))?"),
-    re.compile(r"osu\.ussr\.pl/b/(\d+)"),
-    re.compile(r"osu\.ussr\.pl/beatmaps/(\d+)"),
-    re.compile(r"osu\.ussr\.pl/s/(\d+)"),
-]
+async def check_rank_request(
+    ctx: AbstractContext,
+    set_id: int,
+) -> bool:
+    """Check if a beatmapset has already been requested for ranking."""
+    existing = await ctx.beatmaps.find_rank_request_by_beatmap(set_id, "s")
+    return existing is not None
+
+
+BEATMAP_URL_PATTERN = re.compile(
+    r"(?:/beatmapsets/(\d+)(?:#\w+/(\d+))?)"  # /beatmapsets/{set_id} or /beatmapsets/{set_id}#mode/{beatmap_id}
+    r"|(?:/beatmaps/(\d+))"  # /beatmaps/{beatmap_id}
+    r"|(?:/b/(\d+))"  # /b/{beatmap_id}
+    r"|(?:/s/(\d+))"  # /s/{set_id}
+)
 
 
 def parse_beatmap_url(url: str) -> tuple[str, int] | None:
-    for pattern in BEATMAP_URL_PATTERNS:
-        match = pattern.search(url)
-        if match:
-            groups = match.groups()
-            if len(groups) == 2 and groups[1]:
-                return ("b", int(groups[1]))
-            return ("s", int(groups[0]))
+    """Parse a beatmap URL from any domain.
+
+    Supported formats:
+    - /beatmapsets/{set_id} -> ("s", set_id)
+    - /beatmapsets/{set_id}#mode/{beatmap_id} -> ("b", beatmap_id)
+    - /beatmaps/{beatmap_id} -> ("b", beatmap_id)
+    - /b/{beatmap_id} -> ("b", beatmap_id)
+    - /s/{set_id} -> ("s", set_id)
+    """
+    match = BEATMAP_URL_PATTERN.search(url)
+    if not match:
+        return None
+
+    groups = match.groups()
+    # groups: (beatmapset_id, beatmap_from_hash, beatmaps_id, b_id, s_id)
+
+    # /beatmapsets/{set_id}#mode/{beatmap_id}
+    if groups[1]:
+        return ("b", int(groups[1]))
+    # /beatmapsets/{set_id}
+    if groups[0]:
+        return ("s", int(groups[0]))
+    # /beatmaps/{beatmap_id}
+    if groups[2]:
+        return ("b", int(groups[2]))
+    # /b/{beatmap_id}
+    if groups[3]:
+        return ("b", int(groups[3]))
+    # /s/{set_id}
+    if groups[4]:
+        return ("s", int(groups[4]))
+
     return None
 
 
@@ -318,3 +384,56 @@ async def submit_rank_request(
         return BeatmapError.DAILY_LIMIT_REACHED
 
     return request_id
+
+
+async def list_rank_requests(
+    ctx: AbstractContext,
+    page: int = 1,
+    limit: int = 20,
+) -> BeatmapError.OnSuccess[RankRequestListResult]:
+    if limit > 50:
+        limit = 50
+    offset = (page - 1) * limit
+
+    rows = await ctx.beatmaps.list_pending_rank_requests(limit + 1, offset)
+    total = await ctx.beatmaps.count_pending_rank_requests()
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    requests_dict: dict[int, RankRequestListItem] = {}
+    for row in rows:
+        if row.request_id not in requests_dict:
+            requests_dict[row.request_id] = RankRequestListItem(
+                request_id=row.request_id,
+                request_type=row.request_type,
+                requested_at=row.requested_at,
+                beatmaps=[],
+            )
+        requests_dict[row.request_id].beatmaps.append(
+            RankRequestBeatmapInfo(
+                beatmap_id=row.beatmap_id,
+                beatmapset_id=row.beatmapset_id,
+                song_name=row.song_name,
+                ar=row.ar,
+                od=row.od,
+                mode=row.mode,
+                difficulty_std=row.difficulty_std,
+                difficulty_taiko=row.difficulty_taiko,
+                difficulty_ctb=row.difficulty_ctb,
+                difficulty_mania=row.difficulty_mania,
+                max_combo=row.max_combo,
+                hit_length=row.hit_length,
+                bpm=row.bpm,
+                ranked=row.ranked,
+                mapper_id=row.mapper_id,
+            ),
+        )
+
+    return RankRequestListResult(
+        requests=list(requests_dict.values()),
+        total=total,
+        page=page,
+        limit=limit,
+        has_more=has_more,
+    )

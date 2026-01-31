@@ -96,12 +96,8 @@ def _clan_to_result(c: ClanData, member_count: int) -> ClanResult:
 @dataclass
 class ClanStatsResult:
     total_pp: int
-    average_pp: int
     total_ranked_score: int
     total_total_score: int
-    total_playcount: int
-    total_replays_watched: int
-    total_hits: int
     rank: int
 
 
@@ -425,22 +421,14 @@ async def get_clan_stats(
     if not member_stats:
         return ClanStatsResult(
             total_pp=0,
-            average_pp=0,
             total_ranked_score=0,
             total_total_score=0,
-            total_playcount=0,
-            total_replays_watched=0,
-            total_hits=0,
             rank=0,
         )
 
     total_pp = _compute_weighted_pp(member_stats)
-    average_pp = sum(m.pp for m in member_stats) // len(member_stats)
     total_ranked_score = sum(m.ranked_score for m in member_stats)
     total_total_score = sum(m.total_score for m in member_stats)
-    total_playcount = sum(m.playcount for m in member_stats)
-    total_replays_watched = sum(m.replays_watched for m in member_stats)
-    total_hits = sum(m.total_hits for m in member_stats)
 
     # Compute rank by comparing against all clans
     all_clan_ids = await ctx.clans.get_all_clan_ids()
@@ -459,12 +447,8 @@ async def get_clan_stats(
 
     return ClanStatsResult(
         total_pp=total_pp,
-        average_pp=average_pp,
         total_ranked_score=total_ranked_score,
         total_total_score=total_total_score,
-        total_playcount=total_playcount,
-        total_replays_watched=total_replays_watched,
-        total_hits=total_hits,
         rank=rank,
     )
 
@@ -625,3 +609,7 @@ async def get_clan_member_leaderboard(
         )
         for e in entries
     ]
+
+
+async def get_total_clans(ctx: AbstractContext) -> int:
+    return await ctx.clans.get_total_count()

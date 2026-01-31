@@ -132,6 +132,157 @@ async def lookup_beatmap(
     return response.create(_to_response(result))
 
 
+class RankRequestStatusResponse(BaseModel):
+    submitted: int
+    queue_size: int
+    can_submit: bool
+    submitted_by_user: int | None = None
+    max_per_user: int | None = None
+    next_expiration: str | None = None
+
+
+class RankRequestSubmitRequest(BaseModel):
+    url: str
+
+
+class RankRequestSubmitResponse(BaseModel):
+    request_id: int
+
+
+class RankRequestBeatmapResponse(BaseModel):
+    beatmap_id: int
+    beatmapset_id: int
+    song_name: str
+    ar: float
+    od: float
+    mode: int
+    difficulty_std: float
+    difficulty_taiko: float
+    difficulty_ctb: float
+    difficulty_mania: float
+    max_combo: int
+    hit_length: int
+    bpm: int
+    ranked: int
+    mapper_id: int
+
+
+class RankRequestListItemResponse(BaseModel):
+    request_id: int
+    request_type: str
+    requested_at: int
+    beatmaps: list[RankRequestBeatmapResponse]
+
+
+class RankRequestListResponse(BaseModel):
+    requests: list[RankRequestListItemResponse]
+    total: int
+    page: int
+    limit: int
+    has_more: bool
+
+
+class RankRequestCheckResponse(BaseModel):
+    requested: bool
+
+
+@router.get(
+    "/rank-requests",
+    response_model=response.BaseResponse[RankRequestListResponse],
+)
+async def list_rank_requests(
+    ctx: RequiresContext,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=50),
+) -> Response:
+    result = await beatmaps.list_rank_requests(ctx, page, limit)
+    result = response.unwrap(result)
+
+    return response.create(
+        RankRequestListResponse(
+            requests=[
+                RankRequestListItemResponse(
+                    request_id=req.request_id,
+                    request_type=req.request_type,
+                    requested_at=req.requested_at,
+                    beatmaps=[
+                        RankRequestBeatmapResponse(
+                            beatmap_id=b.beatmap_id,
+                            beatmapset_id=b.beatmapset_id,
+                            song_name=b.song_name,
+                            ar=b.ar,
+                            od=b.od,
+                            mode=b.mode,
+                            difficulty_std=b.difficulty_std,
+                            difficulty_taiko=b.difficulty_taiko,
+                            difficulty_ctb=b.difficulty_ctb,
+                            difficulty_mania=b.difficulty_mania,
+                            max_combo=b.max_combo,
+                            hit_length=b.hit_length,
+                            bpm=b.bpm,
+                            ranked=b.ranked,
+                            mapper_id=b.mapper_id,
+                        )
+                        for b in req.beatmaps
+                    ],
+                )
+                for req in result.requests
+            ],
+            total=result.total,
+            page=result.page,
+            limit=result.limit,
+            has_more=result.has_more,
+        ),
+    )
+
+
+@router.get(
+    "/rank-requests/status",
+    response_model=response.BaseResponse[RankRequestStatusResponse],
+)
+async def get_rank_request_status(ctx: OptionalAuth) -> Response:
+    user_id = ctx.session.user_id if ctx.session else None
+    result = await beatmaps.get_rank_request_status(ctx, user_id)
+    result = response.unwrap(result)
+
+    return response.create(
+        RankRequestStatusResponse(
+            submitted=result.submitted,
+            queue_size=result.queue_size,
+            can_submit=result.can_submit,
+            submitted_by_user=result.submitted_by_user,
+            max_per_user=result.max_per_user,
+            next_expiration=result.next_expiration,
+        ),
+    )
+
+
+@router.get(
+    "/rank-requests/check/{set_id}",
+    response_model=response.BaseResponse[RankRequestCheckResponse],
+)
+async def check_rank_request(
+    ctx: RequiresContext,
+    set_id: int,
+) -> Response:
+    result = await beatmaps.check_rank_request(ctx, set_id)
+    return response.create(RankRequestCheckResponse(requested=result))
+
+
+@router.post(
+    "/rank-requests",
+    response_model=response.BaseResponse[RankRequestSubmitResponse],
+)
+async def submit_rank_request(
+    ctx: RequiresAuth,
+    body: RankRequestSubmitRequest,
+) -> Response:
+    result = await beatmaps.submit_rank_request(ctx, ctx.session.user_id, body.url)
+    result = response.unwrap(result)
+
+    return response.create(RankRequestSubmitResponse(request_id=result))
+
+
 @router.get(
     "/set/{beatmapset_id}",
     response_model=response.BaseResponse[list[BeatmapResponse]],
@@ -215,55 +366,3 @@ async def get_beatmap_scores(
             for s in scores_list
         ],
     )
-
-
-class RankRequestStatusResponse(BaseModel):
-    submitted: int
-    queue_size: int
-    can_submit: bool
-    submitted_by_user: int | None = None
-    max_per_user: int | None = None
-    next_expiration: str | None = None
-
-
-class RankRequestSubmitRequest(BaseModel):
-    url: str
-
-
-class RankRequestSubmitResponse(BaseModel):
-    request_id: int
-
-
-@router.get(
-    "/rank-requests/status",
-    response_model=response.BaseResponse[RankRequestStatusResponse],
-)
-async def get_rank_request_status(ctx: OptionalAuth) -> Response:
-    user_id = ctx.session.user_id if ctx.session else None
-    result = await beatmaps.get_rank_request_status(ctx, user_id)
-    result = response.unwrap(result)
-
-    return response.create(
-        RankRequestStatusResponse(
-            submitted=result.submitted,
-            queue_size=result.queue_size,
-            can_submit=result.can_submit,
-            submitted_by_user=result.submitted_by_user,
-            max_per_user=result.max_per_user,
-            next_expiration=result.next_expiration,
-        ),
-    )
-
-
-@router.post(
-    "/rank-requests",
-    response_model=response.BaseResponse[RankRequestSubmitResponse],
-)
-async def submit_rank_request(
-    ctx: RequiresAuth,
-    body: RankRequestSubmitRequest,
-) -> Response:
-    result = await beatmaps.submit_rank_request(ctx, ctx.session.user_id, body.url)
-    result = response.unwrap(result)
-
-    return response.create(RankRequestSubmitResponse(request_id=result))

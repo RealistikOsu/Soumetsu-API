@@ -55,12 +55,8 @@ class InviteResponse(BaseModel):
 
 class ClanStatsResponse(BaseModel):
     total_pp: int
-    average_pp: int
     total_ranked_score: int
     total_total_score: int
-    total_playcount: int
-    total_replays_watched: int
-    total_hits: int
     rank: int
 
 
@@ -79,6 +75,10 @@ class ClanLeaderboardEntryResponse(BaseModel):
     chosen_mode: ClanModeStatsResponse
     rank: int
     member_count: int
+
+
+class TotalClansResponse(BaseModel):
+    total: int
 
 
 class ClanTopScoreBeatmapResponse(BaseModel):
@@ -179,6 +179,15 @@ async def get_clan_leaderboard(
     )
 
 
+@router.get(
+    "/leaderboard/total",
+    response_model=response.BaseResponse[TotalClansResponse],
+)
+async def get_total_clans(ctx: RequiresContext) -> Response:
+    total = await clans.get_total_clans(ctx)
+    return response.create(TotalClansResponse(total=total))
+
+
 @router.post("/", response_model=response.BaseResponse[ClanResponse])
 async def create_clan(
     ctx: RequiresAuthTransaction,
@@ -223,12 +232,8 @@ async def get_clan_stats(
     return response.create(
         ClanStatsResponse(
             total_pp=result.total_pp,
-            average_pp=result.average_pp,
             total_ranked_score=result.total_ranked_score,
             total_total_score=result.total_total_score,
-            total_playcount=result.total_playcount,
-            total_replays_watched=result.total_replays_watched,
-            total_hits=result.total_hits,
             rank=result.rank,
         ),
     )
