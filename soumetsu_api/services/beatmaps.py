@@ -310,7 +310,7 @@ BEATMAP_URL_PATTERN = re.compile(
     r"(?:/beatmapsets/(\d+)(?:#\w+/(\d+))?)"  # /beatmapsets/{set_id} or /beatmapsets/{set_id}#mode/{beatmap_id}
     r"|(?:/beatmaps/(\d+))"  # /beatmaps/{beatmap_id}
     r"|(?:/b/(\d+))"  # /b/{beatmap_id}
-    r"|(?:/s/(\d+))"  # /s/{set_id}
+    r"|(?:/s/(\d+))",  # /s/{set_id}
 )
 
 
