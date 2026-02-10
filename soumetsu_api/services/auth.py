@@ -75,7 +75,7 @@ async def login(
     if user.password_version == 1:
         return AuthError.PASSWORD_VERSION_OLD
 
-    if not crypto.verify_password(password, user.password_md5):
+    if not await crypto.verify_password(password, user.password_md5):
         return AuthError.INVALID_CREDENTIALS
 
     user_privs = privileges.UserPrivileges(user.privileges)
@@ -131,7 +131,7 @@ async def register(
     if await ctx.users.username_in_history(username):
         return AuthError.USERNAME_RESERVED
 
-    password_hash = crypto.hash_password(password)
+    password_hash = await crypto.hash_password(password)
     api_key = crypto.generate_token(64)
 
     initial_privileges = (

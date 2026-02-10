@@ -428,7 +428,7 @@ async def change_password(
     stored_hash, version = password_data
 
     if version == 2:
-        if not crypto.verify_password(current_password, stored_hash):
+        if not await crypto.verify_password(current_password, stored_hash):
             return UserError.INVALID_PASSWORD
     else:
         md5_pass = crypto.hash_token_md5(current_password)
@@ -438,7 +438,7 @@ async def change_password(
     if new_password:
         if len(new_password) < 8:
             return UserError.WEAK_PASSWORD
-        new_hash = crypto.hash_password(new_password)
+        new_hash = await crypto.hash_password(new_password)
         await ctx.users.update_password(user_id, new_hash)
 
     if new_email:

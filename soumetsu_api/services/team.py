@@ -5,9 +5,9 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.services import users
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
-from soumetsu_api.services import users
 
 
 class TeamError(ServiceError):
@@ -92,7 +92,7 @@ async def get_team(ctx: AbstractContext) -> TeamError.OnSuccess[TeamResult]:
                         accuracy=card_result.accuracy,
                         mode=card_result.mode,
                         custom_mode=card_result.custom_mode,
-                    )
+                    ),
                 )
             else:
                 # Fallback if card data unavailable (user restricted, etc)
@@ -109,7 +109,7 @@ async def get_team(ctx: AbstractContext) -> TeamError.OnSuccess[TeamResult]:
                         accuracy=0.0,
                         mode=0,
                         custom_mode=0,
-                    )
+                    ),
                 )
 
         groups.append(
@@ -117,7 +117,7 @@ async def get_team(ctx: AbstractContext) -> TeamError.OnSuccess[TeamResult]:
                 badge_id=badge_id,
                 name=group_name,
                 members=members,
-            )
+            ),
         )
 
     return TeamResult(groups=groups)
