@@ -9,6 +9,7 @@ from . import friends
 from . import health
 from . import leaderboard
 from . import scores
+from . import stats
 from . import users
 from ._common import AbstractContext
 from ._common import ServiceError

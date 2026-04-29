@@ -27,6 +27,7 @@ from soumetsu_api.resources import FriendsRepository
 from soumetsu_api.resources import LeaderboardRepository
 from soumetsu_api.resources import ScoresRepository
 from soumetsu_api.resources import SessionRepository
+from soumetsu_api.resources import StatsRepository
 from soumetsu_api.resources import UserFilesRepository
 from soumetsu_api.resources import UserHistoryRepository
 from soumetsu_api.resources import UserRepository
@@ -87,6 +88,10 @@ class AbstractContext(ABC):
     @property
     def sessions(self) -> SessionRepository:
         return SessionRepository(self._redis)
+
+    @property
+    def stats(self) -> StatsRepository:
+        return StatsRepository(self._redis)
 
     @property
     def scores(self) -> ScoresRepository:

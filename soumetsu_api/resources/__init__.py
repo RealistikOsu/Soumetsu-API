@@ -11,6 +11,7 @@ from . import friends
 from . import leaderboard
 from . import scores
 from . import sessions
+from . import stats
 from . import user_files
 from . import user_history
 from . import user_stats
@@ -28,6 +29,7 @@ from .leaderboard import LeaderboardRepository
 from .scores import ScoresRepository
 from .sessions import SessionData
 from .sessions import SessionRepository
+from .stats import StatsRepository
 from .user_files import UserFilesRepository
 from .user_history import UserHistoryRepository
 from .user_stats import UserStatsRepository

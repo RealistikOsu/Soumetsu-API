@@ -150,6 +150,7 @@ async def register(
     )
 
     await ctx.user_stats.initialise_all(user_id, username)
+    await ctx.stats.increment_registered_users()
 
     return RegisterResult(user_id=user_id, username=username)
 
