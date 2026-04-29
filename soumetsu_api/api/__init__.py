@@ -24,7 +24,11 @@ logger = logging.get_logger(__name__)
 
 
 def create_app() -> FastAPI:
-    app = FastAPI()
+    app = FastAPI(
+        docs_url="/api/v2/docs",
+        redoc_url="/api/v2/redoc",
+        openapi_url="/api/v2/openapi.json",
+    )
 
     initialise_cors(app)
     initialise_mysql(app)
