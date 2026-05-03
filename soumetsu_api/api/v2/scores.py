@@ -35,6 +35,7 @@ class ScoreResponse(BaseModel):
     accuracy: float
     pp: float
     playtime: int
+    playback_rate: float
 
 
 class BeatmapInfo(BaseModel):
@@ -93,6 +94,7 @@ async def get_top_plays(
                 accuracy=s.accuracy,
                 pp=s.pp,
                 playtime=s.playtime,
+                playback_rate=s.playback_rate,
                 beatmap=BeatmapInfo(
                     beatmap_id=s.beatmap_id,
                     beatmapset_id=s.beatmapset_id,
@@ -136,6 +138,7 @@ async def get_top_plays_mixed(ctx: RequiresContext) -> Response:
                 accuracy=s.accuracy,
                 pp=s.pp,
                 playtime=s.playtime,
+                playback_rate=s.playback_rate,
                 beatmap=BeatmapInfo(
                     beatmap_id=s.beatmap_id,
                     beatmapset_id=s.beatmapset_id,
@@ -181,6 +184,7 @@ async def get_score(
             accuracy=result.accuracy,
             pp=result.pp,
             playtime=result.playtime,
+            playback_rate=result.playback_rate,
         ),
     )
 
@@ -229,6 +233,7 @@ def _to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
         accuracy=s.accuracy,
         pp=s.pp,
         playtime=s.playtime,
+        playback_rate=s.playback_rate,
         beatmap=BeatmapInfo(
             beatmap_id=s.beatmap_id,
             beatmapset_id=s.beatmapset_id,

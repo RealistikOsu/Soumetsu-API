@@ -71,6 +71,7 @@ class ScoreResult:
     accuracy: float
     pp: float
     playtime: int
+    playback_rate: float
 
 
 @dataclass
@@ -113,6 +114,7 @@ def _score_to_result(score: ScoreData) -> ScoreResult:
         accuracy=score.accuracy,
         pp=score.pp,
         playtime=score.playtime,
+        playback_rate=score.playback_rate,
     )
 
 
@@ -137,6 +139,7 @@ def _score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapRe
         accuracy=score.accuracy,
         pp=score.pp,
         playtime=score.playtime,
+        playback_rate=score.playback_rate,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
         song_name=score.song_name,
@@ -298,6 +301,7 @@ def _top_play_to_result(score: ScoreTopPlay) -> ScoreTopPlayResult:
         accuracy=score.accuracy,
         pp=score.pp,
         playtime=score.playtime,
+        playback_rate=score.playback_rate,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
         song_name=score.song_name,
@@ -351,6 +355,7 @@ def _top_play_with_mode_to_result(
         accuracy=score.accuracy,
         pp=score.pp,
         playtime=score.playtime,
+        playback_rate=score.playback_rate,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
         song_name=score.song_name,

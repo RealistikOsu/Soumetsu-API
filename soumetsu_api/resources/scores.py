@@ -29,6 +29,7 @@ class ScoreData(BaseModel):
     accuracy: float
     pp: float
     playtime: int
+    playback_rate: float
 
 
 class ScoreWithBeatmap(ScoreData):
@@ -78,7 +79,7 @@ class ScoresRepository:
                    100_count as count_100, 50_count as count_50,
                    katus_count as count_katus, gekis_count as count_gekis,
                    misses_count as count_misses, time as submitted_at, play_mode,
-                   completed, accuracy, pp, playtime
+                   completed, accuracy, pp, playtime, playback_rate
             FROM {table}
             WHERE id = :score_id
         """
@@ -110,7 +111,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM {table} s
@@ -150,7 +151,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM {table} s
@@ -188,7 +189,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM first_places f
@@ -234,7 +235,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM user_pinned p
@@ -298,7 +299,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked,
                    u.username
@@ -349,7 +350,7 @@ class ScoresRepository:
                             s.100_count as count_100, s.50_count as count_50,
                             s.katus_count as count_katus, s.gekis_count as count_gekis,
                             s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                            s.completed, s.accuracy, s.pp, s.playtime,
+                            s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
                             b.beatmap_id, b.beatmapset_id, b.song_name,
                             b.{diff_col} as difficulty, b.ranked,
                             u.username, {custom_mode} as custom_mode
@@ -382,7 +383,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
                    u.id as player_db_id, u.username, u.country
             FROM {table} s
             INNER JOIN users u ON s.userid = u.id
@@ -422,6 +423,7 @@ class ScoresRepository:
                 accuracy=row["accuracy"],
                 pp=row["pp"],
                 playtime=row["playtime"],
+                playback_rate=row["playback_rate"],
                 player=ScorePlayer(
                     player_id=row["player_db_id"],
                     username=row["username"],

@@ -65,6 +65,7 @@ class ScoreResponse(BaseModel):
     accuracy: float
     pp: float
     playtime: int
+    playback_rate: float
     player: ScorePlayerResponse
 
 
@@ -357,6 +358,7 @@ async def get_beatmap_scores(
                 accuracy=s.accuracy,
                 pp=s.pp,
                 playtime=s.playtime,
+                playback_rate=s.playback_rate,
                 player=ScorePlayerResponse(
                     player_id=s.player.player_id,
                     username=s.player.username,
