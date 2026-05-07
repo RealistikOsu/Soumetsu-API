@@ -46,6 +46,7 @@ class ClanTopScore(BaseModel):
     mods: int
     accuracy: float
     pp: float
+    playback_rate: float
     beatmap_id: int
     beatmapset_id: int
     song_name: str
@@ -338,7 +339,7 @@ class ClansRepository:
 
         query = f"""
             SELECT s.id, s.userid as player_id, s.score, s.max_combo,
-                   s.full_combo, s.mods, s.accuracy, s.pp,
+                   s.full_combo, s.mods, s.accuracy, s.pp, s.playback_rate,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked,
                    u.username

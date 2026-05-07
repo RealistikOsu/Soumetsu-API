@@ -12,6 +12,8 @@ from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.constants import CustomMode
 from soumetsu_api.constants import GameMode
 from soumetsu_api.services import clans
+from soumetsu_api.utilities.mods import Mod
+from soumetsu_api.utilities.mods import mods_from_score
 
 router = APIRouter(prefix="/clans")
 
@@ -95,7 +97,7 @@ class ClanTopScoreResponse(BaseModel):
     username: str
     pp: float
     accuracy: float
-    mods: int
+    mods: list[Mod]
     max_combo: int
     beatmap: ClanTopScoreBeatmapResponse
 
@@ -261,7 +263,7 @@ async def get_clan_top_scores(
                 username=s.username,
                 pp=s.pp,
                 accuracy=s.accuracy,
-                mods=s.mods,
+                mods=mods_from_score(s.mods, s.playback_rate),
                 max_combo=s.max_combo,
                 beatmap=ClanTopScoreBeatmapResponse(
                     beatmap_id=s.beatmap_id,

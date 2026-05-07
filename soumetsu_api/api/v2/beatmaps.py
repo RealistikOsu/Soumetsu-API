@@ -12,6 +12,8 @@ from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.constants import CustomMode
 from soumetsu_api.constants import GameMode
 from soumetsu_api.services import beatmaps
+from soumetsu_api.utilities.mods import Mod
+from soumetsu_api.utilities.mods import mods_from_score
 
 router = APIRouter(prefix="/beatmaps")
 
@@ -52,7 +54,7 @@ class ScoreResponse(BaseModel):
     score: int
     max_combo: int
     full_combo: bool
-    mods: int
+    mods: list[Mod]
     count_300: int
     count_100: int
     count_50: int
@@ -65,7 +67,6 @@ class ScoreResponse(BaseModel):
     accuracy: float
     pp: float
     playtime: int
-    playback_rate: float
     player: ScorePlayerResponse
 
 
@@ -345,7 +346,7 @@ async def get_beatmap_scores(
                 score=s.score,
                 max_combo=s.max_combo,
                 full_combo=s.full_combo,
-                mods=s.mods,
+                mods=mods_from_score(s.mods, s.playback_rate),
                 count_300=s.count_300,
                 count_100=s.count_100,
                 count_50=s.count_50,
@@ -358,7 +359,6 @@ async def get_beatmap_scores(
                 accuracy=s.accuracy,
                 pp=s.pp,
                 playtime=s.playtime,
-                playback_rate=s.playback_rate,
                 player=ScorePlayerResponse(
                     player_id=s.player.player_id,
                     username=s.player.username,
