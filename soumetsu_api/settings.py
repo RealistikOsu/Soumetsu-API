@@ -45,12 +45,16 @@ HCAPTCHA_ENABLED = (
 STORAGE_PATH = os.environ.get("SOUMETSUAPI_STORAGE_PATH", "/data")
 AVATAR_PATH = os.path.join(STORAGE_PATH, "avatars")
 BANNER_PATH = os.path.join(STORAGE_PATH, "banners")
+CLAN_ICON_PATH = os.path.join(STORAGE_PATH, "clan-icons")
 MAX_AVATAR_SIZE = int(
     os.environ.get("SOUMETSUAPI_MAX_AVATAR_SIZE", 2 * 1024 * 1024),
 )  # 2MB
 MAX_BANNER_SIZE = int(
     os.environ.get("SOUMETSUAPI_MAX_BANNER_SIZE", 5 * 1024 * 1024),
 )  # 5MB
+MAX_CLAN_ICON_SIZE = int(
+    os.environ.get("SOUMETSUAPI_MAX_CLAN_ICON_SIZE", 2 * 1024 * 1024),
+)  # 2MB
 
 # API versioning
 API_VERSION = "v2"

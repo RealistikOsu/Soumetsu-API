@@ -20,6 +20,7 @@ from soumetsu_api.resources import AchievementsRepository
 from soumetsu_api.resources import AdminRepository
 from soumetsu_api.resources import BadgesRepository
 from soumetsu_api.resources import BeatmapsRepository
+from soumetsu_api.resources import ClanFilesRepository
 from soumetsu_api.resources import ClansRepository
 from soumetsu_api.resources import CommentsRepository
 from soumetsu_api.resources import ExampleRepository
@@ -136,3 +137,7 @@ class AbstractContext(ABC):
     @property
     def user_files(self) -> UserFilesRepository:
         return UserFilesRepository(self._storage)
+
+    @property
+    def clan_files(self) -> ClanFilesRepository:
+        return ClanFilesRepository(self._storage)

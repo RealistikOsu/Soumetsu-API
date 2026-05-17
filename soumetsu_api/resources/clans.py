@@ -15,7 +15,6 @@ class ClanData(BaseModel):
     id: int
     name: str
     description: str
-    icon: str
     tag: str
     member_limit: int
 
@@ -72,7 +71,7 @@ class ClansRepository:
 
     async def get_by_id(self, clan_id: int) -> ClanData | None:
         row = await self._mysql.fetch_one(
-            """SELECT id, name, description, icon, tag, mlimit as member_limit
+            """SELECT id, name, description, tag, mlimit as member_limit
                FROM clans WHERE id = :clan_id""",
             {"clan_id": clan_id},
         )
@@ -83,7 +82,7 @@ class ClansRepository:
 
     async def get_by_tag(self, tag: str) -> ClanData | None:
         row = await self._mysql.fetch_one(
-            """SELECT id, name, description, icon, tag, mlimit as member_limit
+            """SELECT id, name, description, tag, mlimit as member_limit
                FROM clans WHERE tag = :tag""",
             {"tag": tag},
         )
@@ -100,7 +99,7 @@ class ClansRepository:
     ) -> list[ClanData]:
         if query:
             rows = await self._mysql.fetch_all(
-                """SELECT id, name, description, icon, tag, mlimit as member_limit
+                """SELECT id, name, description, tag, mlimit as member_limit
                    FROM clans WHERE name LIKE :query
                    ORDER BY id DESC
                    LIMIT :limit OFFSET :offset""",
@@ -108,7 +107,7 @@ class ClansRepository:
             )
         else:
             rows = await self._mysql.fetch_all(
-                """SELECT id, name, description, icon, tag, mlimit as member_limit
+                """SELECT id, name, description, tag, mlimit as member_limit
                    FROM clans
                    ORDER BY id DESC
                    LIMIT :limit OFFSET :offset""",
@@ -122,12 +121,11 @@ class ClansRepository:
         name: str,
         description: str,
         tag: str,
-        icon: str = "",
     ) -> int:
         return await self._mysql.execute(
-            """INSERT INTO clans (name, description, icon, tag)
-               VALUES (:name, :description, :icon, :tag)""",
-            {"name": name, "description": description, "icon": icon, "tag": tag},
+            """INSERT INTO clans (name, description, tag)
+               VALUES (:name, :description, :tag)""",
+            {"name": name, "description": description, "tag": tag},
         )
 
     async def update(
@@ -135,7 +133,6 @@ class ClansRepository:
         clan_id: int,
         name: str | None = None,
         description: str | None = None,
-        icon: str | None = None,
     ) -> None:
         updates = []
         params: dict[str, int | str] = {"clan_id": clan_id}
@@ -147,10 +144,6 @@ class ClansRepository:
         if description is not None:
             updates.append("description = :description")
             params["description"] = description
-
-        if icon is not None:
-            updates.append("icon = :icon")
-            params["icon"] = icon
 
         if not updates:
             return

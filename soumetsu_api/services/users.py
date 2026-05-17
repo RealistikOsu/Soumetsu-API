@@ -14,6 +14,7 @@ from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import crypto
 from soumetsu_api.utilities import privileges
+from soumetsu_api.utilities.images import validate_image_magic
 
 
 class UserError(ServiceError):
@@ -447,20 +448,6 @@ async def change_password(
     return None
 
 
-# Magic bytes for supported image formats
-ALLOWED_IMAGE_MAGIC = (
-    b"\x89PNG\r\n\x1a\n",  # PNG
-    b"\xff\xd8\xff",  # JPEG
-    b"GIF87a",  # GIF87a
-    b"GIF89a",  # GIF89a
-)
-
-
-def _validate_image_magic(data: bytes) -> bool:
-    """Check if image data starts with a valid magic byte sequence."""
-    return any(data.startswith(magic) for magic in ALLOWED_IMAGE_MAGIC)
-
-
 async def upload_avatar(
     ctx: AbstractContext,
     user_id: int,
@@ -470,7 +457,7 @@ async def upload_avatar(
     if len(image_data) > settings.MAX_AVATAR_SIZE:
         return UserError.FILE_TOO_LARGE
 
-    if not _validate_image_magic(image_data):
+    if not validate_image_magic(image_data):
         return UserError.INVALID_FILE_FORMAT
 
     path = await ctx.user_files.save_avatar(user_id, image_data)
@@ -489,7 +476,7 @@ async def upload_banner(
     if len(image_data) > settings.MAX_BANNER_SIZE:
         return UserError.FILE_TOO_LARGE
 
-    if not _validate_image_magic(image_data):
+    if not validate_image_magic(image_data):
         return UserError.INVALID_FILE_FORMAT
 
     path = await ctx.user_files.save_banner(user_id, image_data)

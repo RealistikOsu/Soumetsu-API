@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi import Query
 from fastapi import Response
+from fastapi import UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
@@ -22,10 +24,13 @@ class ClanResponse(BaseModel):
     id: int
     name: str
     description: str
-    icon: str
     tag: str
     member_limit: int
     member_count: int
+
+
+class UploadResponse(BaseModel):
+    path: str
 
 
 class ClanMemberResponse(BaseModel):
@@ -44,7 +49,6 @@ class CreateClanRequest(BaseModel):
 class UpdateClanRequest(BaseModel):
     name: str | None = None
     description: str | None = None
-    icon: str | None = None
 
 
 class JoinClanRequest(BaseModel):
@@ -73,7 +77,6 @@ class ClanLeaderboardEntryResponse(BaseModel):
     id: int
     name: str
     tag: str
-    icon: str
     chosen_mode: ClanModeStatsResponse
     rank: int
     member_count: int
@@ -117,7 +120,6 @@ def _to_response(c: clans.ClanResult) -> ClanResponse:
         id=c.id,
         name=c.name,
         description=c.description,
-        icon=c.icon,
         tag=c.tag,
         member_limit=c.member_limit,
         member_count=c.member_count,
@@ -166,7 +168,6 @@ async def get_clan_leaderboard(
                 id=e.id,
                 name=e.name,
                 tag=e.tag,
-                icon=e.icon,
                 chosen_mode=ClanModeStatsResponse(
                     pp=e.chosen_mode.pp,
                     ranked_score=e.chosen_mode.ranked_score,
@@ -319,7 +320,6 @@ async def update_clan(
         clan_id,
         body.name,
         body.description,
-        body.icon,
     )
     result = response.unwrap(result)
 
@@ -335,6 +335,49 @@ async def delete_clan(
     response.unwrap(result)
 
     return response.create(None)
+
+
+@router.post(
+    "/{clan_id}/icon",
+    response_model=response.BaseResponse[UploadResponse],
+)
+async def upload_clan_icon(
+    ctx: RequiresAuthTransaction,
+    clan_id: int,
+    file: UploadFile,
+) -> Response:
+    image_data = await file.read()
+
+    result = await clans.upload_clan_icon(ctx, ctx.user_id, clan_id, image_data)
+    result = response.unwrap(result)
+
+    return response.create(UploadResponse(path=result))
+
+
+@router.delete("/{clan_id}/icon", response_model=response.BaseResponse[None])
+async def delete_clan_icon(
+    ctx: RequiresAuthTransaction,
+    clan_id: int,
+) -> Response:
+    result = await clans.delete_clan_icon(ctx, ctx.user_id, clan_id)
+    response.unwrap(result)
+
+    return response.create(None)
+
+
+@router.get("/{clan_id}/icon")
+async def get_clan_icon(
+    ctx: RequiresContext,
+    clan_id: int,
+) -> Response:
+    result = await clans.get_clan_icon_path(ctx, clan_id)
+    path = response.unwrap(result)
+
+    return FileResponse(
+        path,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=7200"},
+    )
 
 
 @router.get(

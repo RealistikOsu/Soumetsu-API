@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import override
 
 from fastapi import status
 
+from soumetsu_api import settings
 from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.clans import CLAN_PERM_MEMBER
@@ -16,6 +18,7 @@ from soumetsu_api.resources.leaderboard import _calculate_level
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import crypto
+from soumetsu_api.utilities.images import validate_image_magic
 
 
 class ClanError(ServiceError):
@@ -31,6 +34,10 @@ class ClanError(ServiceError):
     USER_NOT_IN_CLAN = "user_not_in_clan"
     INVALID_MODE = "invalid_mode"
     INVALID_CUSTOM_MODE = "invalid_custom_mode"
+    FILE_TOO_LARGE = "file_too_large"
+    INVALID_FILE_FORMAT = "invalid_file_format"
+    UPLOAD_FAILED = "upload_failed"
+    ICON_NOT_FOUND = "icon_not_found"
 
     @override
     def service(self) -> str:
@@ -39,7 +46,11 @@ class ClanError(ServiceError):
     @override
     def status_code(self) -> int:
         match self:
-            case ClanError.CLAN_NOT_FOUND | ClanError.USER_NOT_IN_CLAN:
+            case (
+                ClanError.CLAN_NOT_FOUND
+                | ClanError.USER_NOT_IN_CLAN
+                | ClanError.ICON_NOT_FOUND
+            ):
                 return status.HTTP_404_NOT_FOUND
             case (
                 ClanError.NOT_OWNER | ClanError.NOT_MEMBER | ClanError.CANNOT_KICK_OWNER
@@ -56,6 +67,8 @@ class ClanError(ServiceError):
                 ClanError.INVALID_INVITE
                 | ClanError.INVALID_MODE
                 | ClanError.INVALID_CUSTOM_MODE
+                | ClanError.FILE_TOO_LARGE
+                | ClanError.INVALID_FILE_FORMAT
             ):
                 return status.HTTP_400_BAD_REQUEST
             case _:
@@ -67,7 +80,6 @@ class ClanResult:
     id: int
     name: str
     description: str
-    icon: str
     tag: str
     member_limit: int
     member_count: int
@@ -86,7 +98,6 @@ def _clan_to_result(c: ClanData, member_count: int) -> ClanResult:
         id=c.id,
         name=c.name,
         description=c.description,
-        icon=c.icon,
         tag=c.tag,
         member_limit=c.member_limit,
         member_count=member_count,
@@ -114,7 +125,6 @@ class ClanLeaderboardEntryResult:
     id: int
     name: str
     tag: str
-    icon: str
     chosen_mode: ClanModeStatsResult
     rank: int
     member_count: int
@@ -227,7 +237,6 @@ async def update_clan(
     clan_id: int,
     name: str | None = None,
     description: str | None = None,
-    icon: str | None = None,
 ) -> ClanError.OnSuccess[ClanResult]:
     clan = await ctx.clans.get_by_id(clan_id)
     if not clan:
@@ -241,7 +250,7 @@ async def update_clan(
         if await ctx.clans.name_exists(name):
             return ClanError.NAME_TAKEN
 
-    await ctx.clans.update(clan_id, name, description, icon)
+    await ctx.clans.update(clan_id, name, description)
 
     clan = await ctx.clans.get_by_id(clan_id)
     if not clan:
@@ -265,7 +274,62 @@ async def delete_clan(
         return ClanError.NOT_OWNER
 
     await ctx.clans.delete(clan_id)
+    await ctx.clan_files.delete_clan_icon(clan_id)
     return None
+
+
+async def upload_clan_icon(
+    ctx: AbstractContext,
+    user_id: int,
+    clan_id: int,
+    image_data: bytes,
+) -> ClanError.OnSuccess[str]:
+    clan = await ctx.clans.get_by_id(clan_id)
+    if not clan:
+        return ClanError.CLAN_NOT_FOUND
+
+    perms = await ctx.clans.get_user_perms(user_id, clan_id)
+    if perms != CLAN_PERM_OWNER:
+        return ClanError.NOT_OWNER
+
+    if len(image_data) > settings.MAX_CLAN_ICON_SIZE:
+        return ClanError.FILE_TOO_LARGE
+
+    if not validate_image_magic(image_data):
+        return ClanError.INVALID_FILE_FORMAT
+
+    path = await ctx.clan_files.save_clan_icon(clan_id, image_data)
+    if not path:
+        return ClanError.UPLOAD_FAILED
+
+    return path
+
+
+async def delete_clan_icon(
+    ctx: AbstractContext,
+    user_id: int,
+    clan_id: int,
+) -> ClanError.OnSuccess[None]:
+    clan = await ctx.clans.get_by_id(clan_id)
+    if not clan:
+        return ClanError.CLAN_NOT_FOUND
+
+    perms = await ctx.clans.get_user_perms(user_id, clan_id)
+    if perms != CLAN_PERM_OWNER:
+        return ClanError.NOT_OWNER
+
+    await ctx.clan_files.delete_clan_icon(clan_id)
+    return None
+
+
+async def get_clan_icon_path(
+    ctx: AbstractContext,
+    clan_id: int,
+) -> ClanError.OnSuccess[Path]:
+    path = ctx.clan_files.clan_icon_path(clan_id)
+    if not path.exists():
+        return ClanError.ICON_NOT_FOUND
+    return path
 
 
 async def get_members(
@@ -524,7 +588,6 @@ async def get_clan_leaderboard(
                 id=clan.id,
                 name=clan.name,
                 tag=clan.tag,
-                icon=clan.icon,
                 chosen_mode=ClanModeStatsResult(
                     pp=stats.pp,
                     ranked_score=stats.ranked_score,

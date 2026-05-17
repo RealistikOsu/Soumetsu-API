@@ -4,6 +4,7 @@ from . import achievements
 from . import admin
 from . import badges
 from . import beatmaps
+from . import clan_files
 from . import clans
 from . import comments
 from . import example
@@ -20,6 +21,7 @@ from .achievements import AchievementsRepository
 from .admin import AdminRepository
 from .badges import BadgesRepository
 from .beatmaps import BeatmapsRepository
+from .clan_files import ClanFilesRepository
 from .clans import ClansRepository
 from .comments import CommentsRepository
 from .example import ExampleRepository
