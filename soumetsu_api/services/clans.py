@@ -129,6 +129,7 @@ class ClanTopScoreResult:
     accuracy: float
     mods: int
     max_combo: int
+    playback_rate: float
     beatmap_id: int
     beatmapset_id: int
     song_name: str
@@ -569,6 +570,7 @@ async def get_clan_top_scores(
             accuracy=s.accuracy,
             mods=s.mods,
             max_combo=s.max_combo,
+            playback_rate=s.playback_rate,
             beatmap_id=s.beatmap_id,
             beatmapset_id=s.beatmapset_id,
             song_name=s.song_name,
