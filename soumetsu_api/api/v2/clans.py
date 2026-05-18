@@ -49,6 +49,7 @@ class CreateClanRequest(BaseModel):
 class UpdateClanRequest(BaseModel):
     name: str | None = None
     description: str | None = None
+    tag: str | None = None
 
 
 class JoinClanRequest(BaseModel):
@@ -320,6 +321,7 @@ async def update_clan(
         clan_id,
         body.name,
         body.description,
+        body.tag,
     )
     result = response.unwrap(result)
 

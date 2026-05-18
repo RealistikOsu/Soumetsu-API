@@ -133,6 +133,7 @@ class ClansRepository:
         clan_id: int,
         name: str | None = None,
         description: str | None = None,
+        tag: str | None = None,
     ) -> None:
         updates = []
         params: dict[str, int | str] = {"clan_id": clan_id}
@@ -144,6 +145,10 @@ class ClansRepository:
         if description is not None:
             updates.append("description = :description")
             params["description"] = description
+
+        if tag is not None:
+            updates.append("tag = :tag")
+            params["tag"] = tag
 
         if not updates:
             return

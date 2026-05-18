@@ -237,6 +237,7 @@ async def update_clan(
     clan_id: int,
     name: str | None = None,
     description: str | None = None,
+    tag: str | None = None,
 ) -> ClanError.OnSuccess[ClanResult]:
     clan = await ctx.clans.get_by_id(clan_id)
     if not clan:
@@ -250,7 +251,7 @@ async def update_clan(
         if await ctx.clans.name_exists(name):
             return ClanError.NAME_TAKEN
 
-    await ctx.clans.update(clan_id, name, description)
+    await ctx.clans.update(clan_id, name, description, tag)
 
     clan = await ctx.clans.get_by_id(clan_id)
     if not clan:
