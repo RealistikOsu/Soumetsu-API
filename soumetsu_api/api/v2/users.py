@@ -46,6 +46,22 @@ class UserStatsResponse(BaseModel):
     first_places: int
 
 
+class DiscordProfileInfo(BaseModel):
+    id: str
+    username: str
+    avatar: str
+
+
+def _discord_to_response(discord: users.DiscordLink | None) -> DiscordProfileInfo | None:
+    if discord is None:
+        return None
+    return DiscordProfileInfo(
+        id=discord.discord_id,
+        username=discord.discord_username,
+        avatar=discord.discord_avatar,
+    )
+
+
 class UserProfileResponse(BaseModel):
     id: int
     username: str
@@ -55,6 +71,7 @@ class UserProfileResponse(BaseModel):
     latest_activity: int
     is_online: bool
     clan: ClanInfoResponse | None
+    discord: DiscordProfileInfo | None = None
     stats: UserStatsResponse
 
 
@@ -137,6 +154,18 @@ class EmailResponse(BaseModel):
     email: str
 
 
+class DiscordLinkResponse(BaseModel):
+    discord_id: str | None
+    discord_username: str | None = None
+    discord_avatar: str | None = None
+
+
+class LinkDiscordRequest(BaseModel):
+    discord_id: str
+    discord_username: str = ""
+    discord_avatar: str = ""
+
+
 @router.get("/search", response_model=response.BaseResponse[list[UserCompactResponse]])
 async def search_users(
     ctx: RequiresContext,
@@ -198,6 +227,7 @@ async def get_me(
             latest_activity=result.latest_activity,
             is_online=result.is_online,
             clan=clan,
+            discord=_discord_to_response(result.discord),
             stats=UserStatsResponse(
                 mode=result.stats.mode,
                 custom_mode=result.stats.custom_mode,
@@ -294,6 +324,43 @@ async def change_username(
     response.unwrap(result)
 
     return response.create(None)
+
+
+@router.get("/me/discord", response_model=response.BaseResponse[DiscordLinkResponse])
+async def get_discord(ctx: RequiresAuth) -> Response:
+    link = await users.get_discord_link(ctx, ctx.user_id)
+    if not link:
+        return response.create(DiscordLinkResponse(discord_id=None))
+    return response.create(
+        DiscordLinkResponse(
+            discord_id=link.discord_id,
+            discord_username=link.discord_username,
+            discord_avatar=link.discord_avatar,
+        ),
+    )
+
+
+@router.post("/me/discord", response_model=response.BaseResponse[DiscordLinkResponse])
+async def link_discord(
+    ctx: RequiresAuthTransaction,
+    body: LinkDiscordRequest,
+) -> Response:
+    result = await users.link_discord(
+        ctx,
+        ctx.user_id,
+        body.discord_id,
+        body.discord_username,
+        body.discord_avatar,
+    )
+    response.unwrap(result)
+
+    return response.create(
+        DiscordLinkResponse(
+            discord_id=body.discord_id,
+            discord_username=body.discord_username,
+            discord_avatar=body.discord_avatar,
+        ),
+    )
 
 
 @router.delete("/me/discord", response_model=response.BaseResponse[None])
@@ -423,6 +490,7 @@ async def get_user(
             latest_activity=result.latest_activity,
             is_online=result.is_online,
             clan=clan,
+            discord=_discord_to_response(result.discord),
             stats=UserStatsResponse(
                 mode=result.stats.mode,
                 custom_mode=result.stats.custom_mode,

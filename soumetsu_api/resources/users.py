@@ -205,19 +205,6 @@ class UserRepository:
                 {"username": new_username, "id": user_id},
             )
 
-    async def get_discord_id(self, user_id: int) -> int | None:
-        result = await self._mysql.fetch_val(
-            "SELECT discordid FROM users WHERE id = :id",
-            {"id": user_id},
-        )
-        return result if result else None
-
-    async def unlink_discord(self, user_id: int) -> None:
-        await self._mysql.execute(
-            "UPDATE users SET discordid = 0, discord_username = '' WHERE id = :id",
-            {"id": user_id},
-        )
-
     async def get_email(self, user_id: int) -> str | None:
         result = await self._mysql.fetch_val(
             "SELECT email FROM users WHERE id = :id",

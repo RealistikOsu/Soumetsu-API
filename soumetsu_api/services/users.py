@@ -26,6 +26,7 @@ class UserError(ServiceError):
     INVALID_CUSTOM_MODE = "invalid_custom_mode"
     INVALID_MODE = "invalid_mode"
     NO_DISCORD_LINKED = "no_discord_linked"
+    DISCORD_ALREADY_LINKED = "discord_already_linked"
     INVALID_PASSWORD = "invalid_password"
     WEAK_PASSWORD = "weak_password"
     UPLOAD_FAILED = "upload_failed"
@@ -43,7 +44,11 @@ class UserError(ServiceError):
                 return status.HTTP_404_NOT_FOUND
             case UserError.USER_RESTRICTED | UserError.FORBIDDEN:
                 return status.HTTP_403_FORBIDDEN
-            case UserError.USERNAME_TAKEN | UserError.USERNAME_RESERVED:
+            case (
+                UserError.USERNAME_TAKEN
+                | UserError.USERNAME_RESERVED
+                | UserError.DISCORD_ALREADY_LINKED
+            ):
                 return status.HTTP_409_CONFLICT
             case UserError.FILE_TOO_LARGE:
                 return status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
@@ -61,6 +66,13 @@ class UserError(ServiceError):
 
 
 @dataclass
+class DiscordLink:
+    discord_id: str
+    discord_username: str
+    discord_avatar: str
+
+
+@dataclass
 class UserProfile:
     id: int
     username: str
@@ -70,6 +82,7 @@ class UserProfile:
     latest_activity: int
     is_online: bool
     clan: ClanInfo | None
+    discord: DiscordLink | None
     stats: UserStats
 
 
@@ -190,6 +203,15 @@ async def get_profile(
 
     clan_info = await ctx.users.get_clan_info(user_id)
 
+    discord_row = await ctx.discord_oauth.get_by_user(user_id)
+    discord = None
+    if discord_row and discord_row.discord_id:
+        discord = DiscordLink(
+            discord_id=discord_row.discord_id,
+            discord_username=discord_row.discord_username,
+            discord_avatar=discord_row.discord_avatar,
+        )
+
     return UserProfile(
         id=user.id,
         username=user.username,
@@ -199,6 +221,7 @@ async def get_profile(
         latest_activity=user.latest_activity,
         is_online=False,  # TODO: check bancho presence
         clan=clan_info,
+        discord=discord,
         stats=UserStats(
             mode=mode,
             custom_mode=custom_mode,
@@ -392,15 +415,41 @@ async def change_username(
     return None
 
 
+async def get_discord_link(
+    ctx: AbstractContext,
+    user_id: int,
+):
+    return await ctx.discord_oauth.get_by_user(user_id)
+
+
+async def link_discord(
+    ctx: AbstractContext,
+    user_id: int,
+    discord_id: str,
+    discord_username: str,
+    discord_avatar: str,
+) -> UserError.OnSuccess[None]:
+    existing_owner = await ctx.discord_oauth.get_user_for_discord(discord_id)
+    if existing_owner is not None and existing_owner != user_id:
+        return UserError.DISCORD_ALREADY_LINKED
+
+    # Clear any previous link for this user (handles re-link to a fresh
+    # account) and any stale row for this discord_id (handles the same user
+    # re-linking the same account, which would otherwise hit the unique key).
+    await ctx.discord_oauth.delete_by_user(user_id)
+    await ctx.discord_oauth.insert(user_id, discord_id, discord_username, discord_avatar)
+    return None
+
+
 async def unlink_discord(
     ctx: AbstractContext,
     user_id: int,
 ) -> UserError.OnSuccess[None]:
-    discord_id = await ctx.users.get_discord_id(user_id)
-    if not discord_id:
+    existing = await ctx.discord_oauth.get_by_user(user_id)
+    if not existing:
         return UserError.NO_DISCORD_LINKED
 
-    await ctx.users.unlink_discord(user_id)
+    await ctx.discord_oauth.delete_by_user(user_id)
     return None
 
 

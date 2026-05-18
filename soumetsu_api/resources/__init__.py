@@ -7,6 +7,7 @@ from . import beatmaps
 from . import clan_files
 from . import clans
 from . import comments
+from . import discord_oauth
 from . import example
 from . import friends
 from . import leaderboard
@@ -24,6 +25,8 @@ from .beatmaps import BeatmapsRepository
 from .clan_files import ClanFilesRepository
 from .clans import ClansRepository
 from .comments import CommentsRepository
+from .discord_oauth import DiscordOAuthData
+from .discord_oauth import DiscordOAuthRepository
 from .example import ExampleRepository
 from .example import ExampleResource
 from .friends import FriendsRepository

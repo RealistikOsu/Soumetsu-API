@@ -23,6 +23,7 @@ from soumetsu_api.resources import BeatmapsRepository
 from soumetsu_api.resources import ClanFilesRepository
 from soumetsu_api.resources import ClansRepository
 from soumetsu_api.resources import CommentsRepository
+from soumetsu_api.resources import DiscordOAuthRepository
 from soumetsu_api.resources import ExampleRepository
 from soumetsu_api.resources import FriendsRepository
 from soumetsu_api.resources import LeaderboardRepository
@@ -109,6 +110,10 @@ class AbstractContext(ABC):
     @property
     def clans(self) -> ClansRepository:
         return ClansRepository(self._mysql)
+
+    @property
+    def discord_oauth(self) -> DiscordOAuthRepository:
+        return DiscordOAuthRepository(self._mysql)
 
     @property
     def friends(self) -> FriendsRepository:
