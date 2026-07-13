@@ -437,7 +437,9 @@ async def link_discord(
     # account) and any stale row for this discord_id (handles the same user
     # re-linking the same account, which would otherwise hit the unique key).
     await ctx.discord_oauth.delete_by_user(user_id)
-    await ctx.discord_oauth.insert(user_id, discord_id, discord_username, discord_avatar)
+    await ctx.discord_oauth.insert(
+        user_id, discord_id, discord_username, discord_avatar,
+    )
     return None
 
 

@@ -52,7 +52,9 @@ class DiscordProfileInfo(BaseModel):
     avatar: str
 
 
-def _discord_to_response(discord: users.DiscordLink | None) -> DiscordProfileInfo | None:
+def _discord_to_response(
+    discord: users.DiscordLink | None,
+) -> DiscordProfileInfo | None:
     if discord is None:
         return None
     return DiscordProfileInfo(
