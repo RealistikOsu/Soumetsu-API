@@ -25,8 +25,8 @@ class AchievementsRepository:
 
     async def get_all(self) -> list[AchievementData]:
         rows = await self._mysql.fetch_all(
-            """SELECT id, name, `desc` as description, file
-               FROM ussr_achievements
+            """SELECT id, name, description, file
+               FROM achievements
                ORDER BY id ASC""",
             {},
         )
@@ -37,8 +37,8 @@ class AchievementsRepository:
         user_id: int,
     ) -> list[UserAchievementData]:
         rows = await self._mysql.fetch_all(
-            """SELECT achievement_id, time
-               FROM users_achievements
+            """SELECT achievement_id, UNIX_TIMESTAMP(unlocked_at) as time
+               FROM user_achievements
                WHERE user_id = :user_id
                ORDER BY achievement_id ASC""",
             {"user_id": user_id},

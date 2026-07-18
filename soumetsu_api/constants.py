@@ -30,13 +30,6 @@ MODE_SUFFIXES: dict[int, str] = {
     GameMode.MANIA: "mania",
 }
 
-# Database table names for custom mode-specific stats
-STATS_TABLES: dict[int, str] = {
-    CustomMode.VANILLA: "users_stats",
-    CustomMode.RELAX: "rx_stats",
-    CustomMode.AUTOPILOT: "ap_stats",
-}
-
 # Level calculation constants
 LEVEL_100_THRESHOLD = 100
 MAX_LEVEL = 120
@@ -68,10 +61,5 @@ def is_valid_custom_mode(custom_mode: int) -> bool:
 
 
 def get_mode_suffix(mode: int) -> str:
-    """Get the database column suffix for a game mode."""
+    """Get the mode suffix string (used for redis leaderboard keys)."""
     return MODE_SUFFIXES[mode]
-
-
-def get_stats_table(custom_mode: int) -> str:
-    """Get the database table name for a custom mode."""
-    return STATS_TABLES[custom_mode]

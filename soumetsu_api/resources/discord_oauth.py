@@ -56,7 +56,8 @@ class DiscordOAuthRepository:
             {
                 "user_id": user_id,
                 "discord_id": discord_id,
-                "discord_username": discord_username,
-                "discord_avatar": discord_avatar,
+                # clean schema columns are NOT NULL DEFAULT ''
+                "discord_username": discord_username or "",
+                "discord_avatar": discord_avatar or "",
             },
         )

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import override
 
@@ -106,12 +105,10 @@ async def create_comment(
     if privileges.is_restricted(user_privs):
         return CommentError.USER_RESTRICTED
 
-    created_at = str(int(time.time()))
     comment_id = await ctx.comments.create(
         author_id=author_id,
         profile_id=profile_id,
         message=message,
-        created_at=created_at,
     )
 
     comment = await ctx.comments.find_by_id(comment_id)

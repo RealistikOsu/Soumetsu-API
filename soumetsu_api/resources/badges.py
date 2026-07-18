@@ -55,8 +55,8 @@ class BadgesRepository:
         rows = await self._mysql.fetch_all(
             """SELECT u.id as user_id, u.username, u.country
                FROM users u
-               INNER JOIN user_badges ub ON u.id = ub.user
-               WHERE ub.badge = :badge_id
+               INNER JOIN user_badges ub ON u.id = ub.user_id
+               WHERE ub.badge_id = :badge_id
                AND u.public = 1
                ORDER BY u.username ASC
                LIMIT :limit OFFSET :offset""",
@@ -68,8 +68,8 @@ class BadgesRepository:
         result = await self._mysql.fetch_val(
             """SELECT COUNT(*)
                FROM user_badges ub
-               INNER JOIN users u ON ub.user = u.id
-               WHERE ub.badge = :badge_id
+               INNER JOIN users u ON ub.user_id = u.id
+               WHERE ub.badge_id = :badge_id
                AND u.public = 1""",
             {"badge_id": badge_id},
         )

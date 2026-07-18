@@ -175,7 +175,7 @@ def _beatmap_to_full_response(beatmap: BeatmapData) -> PeppyBeatmapResponse:
         count_spinner="0",
         submit_date="",
         approved_date="",
-        last_update=str(beatmap.latest_update),
+        last_update=str(beatmap.updated_at),
         artist="",
         artist_unicode="",
         title=beatmap.song_name,
@@ -259,7 +259,7 @@ async def get_user(
         PeppyUserResponse(
             user_id=str(user.id),
             username=user.username,
-            join_date=str(user.register_datetime),
+            join_date=str(user.registered_at),
             count300=str(stats.total_hits if stats else 0),
             count100="0",
             count50="0",

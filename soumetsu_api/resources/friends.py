@@ -26,8 +26,8 @@ class FriendsRepository:
         rows = await self._mysql.fetch_all(
             """SELECT u.id as user_id, u.username, u.country
                FROM users_relationships r
-               INNER JOIN users u ON r.user2 = u.id
-               WHERE r.user1 = :user_id
+               INNER JOIN users u ON r.target_id = u.id
+               WHERE r.user_id = :user_id
                AND u.public = 1
                ORDER BY u.username ASC
                LIMIT :limit OFFSET :offset""",
@@ -44,8 +44,8 @@ class FriendsRepository:
         rows = await self._mysql.fetch_all(
             """SELECT u.id as user_id, u.username, u.country
                FROM users_relationships r
-               INNER JOIN users u ON r.user1 = u.id
-               WHERE r.user2 = :user_id
+               INNER JOIN users u ON r.user_id = u.id
+               WHERE r.target_id = :user_id
                AND u.public = 1
                ORDER BY u.username ASC
                LIMIT :limit OFFSET :offset""",
@@ -56,14 +56,14 @@ class FriendsRepository:
     async def is_friend(self, user_id: int, friend_id: int) -> bool:
         count = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM users_relationships
-               WHERE user1 = :user_id AND user2 = :friend_id""",
+               WHERE user_id = :user_id AND target_id = :friend_id""",
             {"user_id": user_id, "friend_id": friend_id},
         )
         return count > 0
 
     async def add_friend(self, user_id: int, friend_id: int) -> None:
         await self._mysql.execute(
-            """INSERT INTO users_relationships (user1, user2)
+            """INSERT INTO users_relationships (user_id, target_id)
                VALUES (:user_id, :friend_id)""",
             {"user_id": user_id, "friend_id": friend_id},
         )
@@ -71,7 +71,7 @@ class FriendsRepository:
     async def remove_friend(self, user_id: int, friend_id: int) -> None:
         await self._mysql.execute(
             """DELETE FROM users_relationships
-               WHERE user1 = :user_id AND user2 = :friend_id""",
+               WHERE user_id = :user_id AND target_id = :friend_id""",
             {"user_id": user_id, "friend_id": friend_id},
         )
 
@@ -79,8 +79,8 @@ class FriendsRepository:
         count = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM users_relationships r1
                INNER JOIN users_relationships r2
-               ON r1.user1 = r2.user2 AND r1.user2 = r2.user1
-               WHERE r1.user1 = :user_id AND r1.user2 = :friend_id""",
+               ON r1.user_id = r2.target_id AND r1.target_id = r2.user_id
+               WHERE r1.user_id = :user_id AND r1.target_id = :friend_id""",
             {"user_id": user_id, "friend_id": friend_id},
         )
         return count > 0
@@ -88,8 +88,8 @@ class FriendsRepository:
     async def get_follower_count(self, user_id: int) -> int:
         count = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM users_relationships r
-               INNER JOIN users u ON r.user1 = u.id
-               WHERE r.user2 = :user_id AND u.public = 1""",
+               INNER JOIN users u ON r.user_id = u.id
+               WHERE r.target_id = :user_id AND u.public = 1""",
             {"user_id": user_id},
         )
         return count or 0
@@ -97,8 +97,8 @@ class FriendsRepository:
     async def get_friend_count(self, user_id: int) -> int:
         count = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM users_relationships r
-               INNER JOIN users u ON r.user2 = u.id
-               WHERE r.user1 = :user_id AND u.public = 1""",
+               INNER JOIN users u ON r.target_id = u.id
+               WHERE r.user_id = :user_id AND u.public = 1""",
             {"user_id": user_id},
         )
         return count or 0

@@ -6,6 +6,7 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.constants import combined_mode
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import privileges
@@ -65,9 +66,8 @@ async def get_rank_history(
     if privileges.is_restricted(user_privs):
         return UserHistoryError.USER_RESTRICTED
 
-    # Mode combines mode and custom_mode: mode + custom_mode * 4
-    combined_mode = mode + custom_mode * 4
-    history = await ctx.user_history.get_history(user_id, combined_mode)
+    cmode = combined_mode(mode, custom_mode)
+    history = await ctx.user_history.get_history(user_id, cmode)
 
     return [
         RankHistoryResult(
@@ -93,8 +93,8 @@ async def get_pp_history(
     if privileges.is_restricted(user_privs):
         return UserHistoryError.USER_RESTRICTED
 
-    combined_mode = mode + custom_mode * 4
-    history = await ctx.user_history.get_history(user_id, combined_mode)
+    cmode = combined_mode(mode, custom_mode)
+    history = await ctx.user_history.get_history(user_id, cmode)
 
     return [
         PPHistoryResult(

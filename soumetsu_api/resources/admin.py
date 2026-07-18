@@ -3,9 +3,23 @@ from __future__ import annotations
 import time
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
-from soumetsu_api.constants import MODE_SUFFIXES
-from soumetsu_api.constants import STATS_TABLES
+from soumetsu_api.constants import combined_mode
 from soumetsu_api.utilities.validation import safe_username
+
+# infractions.type (see migrate_data/steps/20_infractions.sql)
+_INFRACTION_RESTRICT = 0
+_INFRACTION_BAN = 1
+_INFRACTION_SILENCE = 2
+
+# columns to zero out when wiping a tall user_stats row
+_WIPE_STATS = (
+    "ranked_score = 0, total_score = 0, pp = 0, accuracy = 0, playcount = 0, "
+    "playtime = 0, total_hits = 0, max_combo = 0, replays_watched = 0, level = 1, "
+    "count_ssh = 0, count_ss = 0, count_sh = 0, count_s = 0, count_a = 0"
+)
+
+# valid vanilla modes per custom mode (used when wiping "all" modes)
+_MODES_FOR_CUSTOM = {0: (0, 1, 2, 3), 1: (0, 1, 2), 2: (0,)}
 
 
 class AdminRepository:
@@ -20,50 +34,48 @@ class AdminRepository:
         text: str,
         through: str,
     ) -> int:
+        # created_at defaults to CURRENT_TIMESTAMP in the clean schema.
         return await self._mysql.execute(
-            """INSERT INTO rap_logs (userid, text, datetime, through)
-               VALUES (:user_id, :text, :datetime, :through)""",
-            {
-                "user_id": user_id,
-                "text": text,
-                "datetime": int(time.time()),
-                "through": through,
-            },
+            """INSERT INTO rap_logs (user_id, text, through)
+               VALUES (:user_id, :text, :through)""",
+            {"user_id": user_id, "text": text, "through": through},
         )
 
     async def ban_user(self, user_id: int, reason: str = "") -> None:
         await self._mysql.execute(
-            """UPDATE users SET privileges = privileges & ~3,
-                               ban_datetime = :ban_time,
-                               ban_reason = :reason
-               WHERE id = :user_id""",
-            {
-                "user_id": user_id,
-                "ban_time": str(int(time.time())),
-                "reason": reason,
-            },
+            "UPDATE users SET public = 0 WHERE id = :user_id",
+            {"user_id": user_id},
+        )
+        await self._mysql.execute(
+            """INSERT INTO infractions (user_id, type, reason, active)
+               VALUES (:user_id, :type, :reason, 1)""",
+            {"user_id": user_id, "type": _INFRACTION_BAN, "reason": reason},
         )
 
     async def restrict_user(self, user_id: int, reason: str = "") -> None:
         await self._mysql.execute(
-            """UPDATE users SET privileges = privileges & ~1,
-                               ban_datetime = :ban_time,
-                               ban_reason = :reason
-               WHERE id = :user_id""",
-            {
-                "user_id": user_id,
-                "ban_time": str(int(time.time())),
-                "reason": reason,
-            },
+            "UPDATE users SET public = 0 WHERE id = :user_id",
+            {"user_id": user_id},
+        )
+        await self._mysql.execute(
+            """INSERT INTO infractions (user_id, type, reason, active)
+               VALUES (:user_id, :type, :reason, 1)""",
+            {"user_id": user_id, "type": _INFRACTION_RESTRICT, "reason": reason},
         )
 
     async def unrestrict_user(self, user_id: int) -> None:
         await self._mysql.execute(
-            """UPDATE users SET privileges = privileges | 3,
-                               ban_datetime = '0',
-                               ban_reason = ''
-               WHERE id = :user_id""",
+            "UPDATE users SET public = 1 WHERE id = :user_id",
             {"user_id": user_id},
+        )
+        await self._mysql.execute(
+            """UPDATE infractions SET active = 0
+               WHERE user_id = :user_id AND active = 1 AND type IN (:restrict, :ban)""",
+            {
+                "user_id": user_id,
+                "restrict": _INFRACTION_RESTRICT,
+                "ban": _INFRACTION_BAN,
+            },
         )
 
     async def update_user(
@@ -92,19 +104,33 @@ class AdminRepository:
             updates.append("country = :country")
             params["country"] = country
 
-        if silence_end is not None:
-            updates.append("silence_end = :silence_end")
-            params["silence_end"] = silence_end
-
         if notes is not None:
             updates.append("notes = :notes")
             params["notes"] = notes
 
-        if not updates:
-            return
+        if updates:
+            query = f"UPDATE users SET {', '.join(updates)} WHERE id = :user_id"
+            await self._mysql.execute(query, params)
 
-        query = f"UPDATE users SET {', '.join(updates)} WHERE id = :user_id"
-        await self._mysql.execute(query, params)
+        # Silence lives in infractions (type 2) in the clean schema.
+        if silence_end is not None:
+            if silence_end > 0:
+                await self._mysql.execute(
+                    """INSERT INTO infractions (user_id, type, active, expires_at)
+                       VALUES (:user_id, :type, :active, FROM_UNIXTIME(:silence_end))""",
+                    {
+                        "user_id": user_id,
+                        "type": _INFRACTION_SILENCE,
+                        "active": 1 if silence_end > int(time.time()) else 0,
+                        "silence_end": silence_end,
+                    },
+                )
+            else:
+                await self._mysql.execute(
+                    """UPDATE infractions SET active = 0
+                       WHERE user_id = :user_id AND active = 1 AND type = :type""",
+                    {"user_id": user_id, "type": _INFRACTION_SILENCE},
+                )
 
     async def wipe_user_stats(
         self,
@@ -112,40 +138,14 @@ class AdminRepository:
         mode: int | None = None,
         custom_mode: int = 0,
     ) -> None:
-        table = STATS_TABLES[custom_mode]
-
         if mode is not None:
-            suffix = MODE_SUFFIXES[mode]
-            await self._mysql.execute(
-                f"""UPDATE {table} SET
-                    pp_{suffix} = 0,
-                    ranked_score_{suffix} = 0,
-                    total_score_{suffix} = 0,
-                    playcount_{suffix} = 0,
-                    avg_accuracy_{suffix} = 0,
-                    total_hits_{suffix} = 0,
-                    playtime_{suffix} = 0,
-                    max_combo_{suffix} = 0,
-                    replays_watched_{suffix} = 0,
-                    level_{suffix} = 1
-                    WHERE id = :user_id""",
-                {"user_id": user_id},
-            )
+            modes = (mode,)
         else:
-            for m in range(4):
-                suffix = MODE_SUFFIXES[m]
-                await self._mysql.execute(
-                    f"""UPDATE {table} SET
-                        pp_{suffix} = 0,
-                        ranked_score_{suffix} = 0,
-                        total_score_{suffix} = 0,
-                        playcount_{suffix} = 0,
-                        avg_accuracy_{suffix} = 0,
-                        total_hits_{suffix} = 0,
-                        playtime_{suffix} = 0,
-                        max_combo_{suffix} = 0,
-                        replays_watched_{suffix} = 0,
-                        level_{suffix} = 1
-                        WHERE id = :user_id""",
-                    {"user_id": user_id},
-                )
+            modes = _MODES_FOR_CUSTOM.get(custom_mode, (0, 1, 2, 3))
+
+        for m in modes:
+            cmode = combined_mode(m, custom_mode)
+            await self._mysql.execute(
+                f"UPDATE user_stats SET {_WIPE_STATS} WHERE user_id = :user_id AND mode = :cmode",
+                {"user_id": user_id, "cmode": cmode},
+            )
