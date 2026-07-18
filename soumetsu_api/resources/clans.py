@@ -3,12 +3,10 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
-from soumetsu_api.constants import get_mode_suffix
-from soumetsu_api.constants import get_stats_table
-from soumetsu_api.resources.scores import SCORE_TABLES
+from soumetsu_api.constants import combined_mode
 
 CLAN_PERM_MEMBER = 1
-CLAN_PERM_OWNER = 2
+CLAN_PERM_OWNER = 8
 
 
 class ClanData(BaseModel):
@@ -71,7 +69,7 @@ class ClansRepository:
 
     async def get_by_id(self, clan_id: int) -> ClanData | None:
         row = await self._mysql.fetch_one(
-            """SELECT id, name, description, tag, mlimit as member_limit
+            """SELECT id, name, description, tag, member_limit
                FROM clans WHERE id = :clan_id""",
             {"clan_id": clan_id},
         )
@@ -82,7 +80,7 @@ class ClansRepository:
 
     async def get_by_tag(self, tag: str) -> ClanData | None:
         row = await self._mysql.fetch_one(
-            """SELECT id, name, description, tag, mlimit as member_limit
+            """SELECT id, name, description, tag, member_limit
                FROM clans WHERE tag = :tag""",
             {"tag": tag},
         )
@@ -99,7 +97,7 @@ class ClansRepository:
     ) -> list[ClanData]:
         if query:
             rows = await self._mysql.fetch_all(
-                """SELECT id, name, description, tag, mlimit as member_limit
+                """SELECT id, name, description, tag, member_limit
                    FROM clans WHERE name LIKE :query
                    ORDER BY id DESC
                    LIMIT :limit OFFSET :offset""",
@@ -107,7 +105,7 @@ class ClansRepository:
             )
         else:
             rows = await self._mysql.fetch_all(
-                """SELECT id, name, description, tag, mlimit as member_limit
+                """SELECT id, name, description, tag, member_limit
                    FROM clans
                    ORDER BY id DESC
                    LIMIT :limit OFFSET :offset""",
@@ -158,11 +156,11 @@ class ClansRepository:
 
     async def delete(self, clan_id: int) -> None:
         await self._mysql.execute(
-            "DELETE FROM user_clans WHERE clan = :clan_id",
+            "UPDATE users SET clan_id = NULL, clan_perms = 0 WHERE clan_id = :clan_id",
             {"clan_id": clan_id},
         )
         await self._mysql.execute(
-            "DELETE FROM clans_invites WHERE clan = :clan_id",
+            "DELETE FROM clans_invites WHERE clan_id = :clan_id",
             {"clan_id": clan_id},
         )
         await self._mysql.execute(
@@ -177,11 +175,10 @@ class ClansRepository:
         offset: int = 0,
     ) -> list[ClanMemberData]:
         rows = await self._mysql.fetch_all(
-            """SELECT uc.user as user_id, u.username, u.country, uc.perms
-               FROM user_clans uc
-               INNER JOIN users u ON uc.user = u.id
-               WHERE uc.clan = :clan_id
-               ORDER BY uc.perms DESC, u.username ASC
+            """SELECT u.id as user_id, u.username, u.country, u.clan_perms as perms
+               FROM users u
+               WHERE u.clan_id = :clan_id
+               ORDER BY u.clan_perms DESC, u.username ASC
                LIMIT :limit OFFSET :offset""",
             {"clan_id": clan_id, "limit": limit, "offset": offset},
         )
@@ -189,24 +186,22 @@ class ClansRepository:
 
     async def get_member_count(self, clan_id: int) -> int:
         result = await self._mysql.fetch_val(
-            "SELECT COUNT(*) FROM user_clans WHERE clan = :clan_id",
+            "SELECT COUNT(*) FROM users WHERE clan_id = :clan_id",
             {"clan_id": clan_id},
         )
         return result or 0
 
     async def get_user_clan(self, user_id: int) -> int | None:
-        result = await self._mysql.fetch_val(
-            "SELECT clan FROM user_clans WHERE user = :user_id",
+        return await self._mysql.fetch_val(
+            "SELECT clan_id FROM users WHERE id = :user_id AND clan_id IS NOT NULL",
             {"user_id": user_id},
         )
-        return result
 
     async def get_user_perms(self, user_id: int, clan_id: int) -> int | None:
-        result = await self._mysql.fetch_val(
-            "SELECT perms FROM user_clans WHERE user = :user_id AND clan = :clan_id",
+        return await self._mysql.fetch_val(
+            "SELECT clan_perms FROM users WHERE id = :user_id AND clan_id = :clan_id",
             {"user_id": user_id, "clan_id": clan_id},
         )
-        return result
 
     async def add_member(
         self,
@@ -215,8 +210,8 @@ class ClansRepository:
         perms: int = CLAN_PERM_MEMBER,
     ) -> None:
         await self._mysql.execute(
-            """INSERT INTO user_clans (user, clan, perms)
-               VALUES (:user_id, :clan_id, :perms)""",
+            """UPDATE users SET clan_id = :clan_id, clan_perms = :perms
+               WHERE id = :user_id""",
             {"user_id": user_id, "clan_id": clan_id, "perms": perms},
         )
 
@@ -232,10 +227,13 @@ class ClansRepository:
         Returns True if the member was added, False if the clan was full.
         """
         result = await self._mysql.execute(
-            """INSERT INTO user_clans (user, clan, perms)
-               SELECT :user_id, :clan_id, :perms
-               FROM dual
-               WHERE (SELECT COUNT(*) FROM user_clans WHERE clan = :clan_id) < :limit""",
+            """UPDATE users SET clan_id = :clan_id, clan_perms = :perms
+               WHERE id = :user_id
+               AND (
+                   SELECT COUNT(*) FROM (
+                       SELECT id FROM users WHERE clan_id = :clan_id
+                   ) AS current_members
+               ) < :limit""",
             {
                 "user_id": user_id,
                 "clan_id": clan_id,
@@ -247,7 +245,8 @@ class ClansRepository:
 
     async def remove_member(self, clan_id: int, user_id: int) -> None:
         await self._mysql.execute(
-            "DELETE FROM user_clans WHERE user = :user_id AND clan = :clan_id",
+            """UPDATE users SET clan_id = NULL, clan_perms = 0
+               WHERE id = :user_id AND clan_id = :clan_id""",
             {"user_id": user_id, "clan_id": clan_id},
         )
 
@@ -267,22 +266,27 @@ class ClansRepository:
 
     async def get_invite(self, clan_id: int) -> str | None:
         result = await self._mysql.fetch_val(
-            "SELECT invite FROM clans_invites WHERE clan = :clan_id",
+            "SELECT invite FROM clans_invites WHERE clan_id = :clan_id",
             {"clan_id": clan_id},
         )
         return result
 
     async def set_invite(self, clan_id: int, invite: str) -> None:
+        # clean schema enforces UNIQUE(invite) but not UNIQUE(clan_id); keep a
+        # single invite per clan by clearing any existing one first.
         await self._mysql.execute(
-            """INSERT INTO clans_invites (clan, invite)
-               VALUES (:clan_id, :invite)
-               ON DUPLICATE KEY UPDATE invite = :invite""",
+            "DELETE FROM clans_invites WHERE clan_id = :clan_id",
+            {"clan_id": clan_id},
+        )
+        await self._mysql.execute(
+            """INSERT INTO clans_invites (clan_id, invite)
+               VALUES (:clan_id, :invite)""",
             {"clan_id": clan_id, "invite": invite},
         )
 
     async def get_clan_by_invite(self, invite: str) -> int | None:
         result = await self._mysql.fetch_val(
-            "SELECT clan FROM clans_invites WHERE invite = :invite",
+            "SELECT clan_id FROM clans_invites WHERE invite = :invite",
             {"invite": invite},
         )
         return result
@@ -293,24 +297,21 @@ class ClansRepository:
         mode: int,
         custom_mode: int,
     ) -> list[ClanMemberStats]:
-        table = get_stats_table(custom_mode)
-        suffix = get_mode_suffix(mode)
+        cmode = combined_mode(mode, custom_mode)
 
-        query = f"""
-            SELECT s.pp_{suffix} as pp,
-                   s.ranked_score_{suffix} as ranked_score,
-                   s.total_score_{suffix} as total_score,
-                   s.playcount_{suffix} as playcount,
-                   s.replays_watched_{suffix} as replays_watched,
-                   s.total_hits_{suffix} as total_hits
-            FROM user_clans uc
-            INNER JOIN {table} s ON uc.user = s.id
-            INNER JOIN users u ON uc.user = u.id
-            WHERE uc.clan = :clan_id
+        query = """
+            SELECT s.pp, s.ranked_score, s.total_score, s.playcount,
+                   s.replays_watched, s.total_hits
+            FROM users u
+            INNER JOIN user_stats s ON s.user_id = u.id AND s.mode = :cmode
+            WHERE u.clan_id = :clan_id
             AND u.public = 1
-            ORDER BY s.pp_{suffix} DESC
+            ORDER BY s.pp DESC
         """
-        rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})
+        rows = await self._mysql.fetch_all(
+            query,
+            {"clan_id": clan_id, "cmode": cmode},
+        )
         return [ClanMemberStats(**row) for row in rows]
 
     async def get_all_clan_ids(self) -> list[int]:
@@ -327,36 +328,32 @@ class ClansRepository:
         custom_mode: int,
         limit: int = 4,
     ) -> list[ClanTopScore]:
-        table = SCORE_TABLES[custom_mode]
-        diff_col = [
-            "difficulty_std",
-            "difficulty_taiko",
-            "difficulty_ctb",
-            "difficulty_mania",
-        ][mode]
+        cmode = combined_mode(mode, custom_mode)
 
-        query = f"""
-            SELECT s.id, s.userid as player_id, s.score, s.max_combo,
+        query = """
+            SELECT s.id, s.user_id as player_id, s.score, s.max_combo,
                    s.full_combo, s.mods, s.accuracy, s.pp, s.playback_rate,
-                   b.beatmap_id, b.beatmapset_id, b.song_name,
-                   b.{diff_col} as difficulty, b.ranked,
+                   b.id as beatmap_id, b.set_id as beatmapset_id,
+                   CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') as song_name,
+                   bd.stars as difficulty, b.status as ranked,
                    u.username
-            FROM {table} s
-            INNER JOIN user_clans uc ON s.userid = uc.user
-            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-            INNER JOIN users u ON s.userid = u.id
-            WHERE uc.clan = :clan_id
-            AND s.play_mode = :mode
-            AND s.completed = 3
+            FROM scores s
+            INNER JOIN users u ON s.user_id = u.id
+            INNER JOIN beatmaps b ON s.beatmap_md5 = b.md5
+            INNER JOIN beatmapsets bs ON b.set_id = bs.id
+            LEFT JOIN beatmap_difficulty bd ON bd.beatmap_id = b.id AND bd.mode = :diff_mode
+            WHERE u.clan_id = :clan_id
+            AND s.mode = :cmode
+            AND s.status = 3
             AND s.pp > 0
-            AND b.ranked = 2
+            AND b.status = 2
             AND u.public = 1
             ORDER BY s.pp DESC
             LIMIT :limit
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"clan_id": clan_id, "mode": mode, "limit": limit},
+            {"clan_id": clan_id, "cmode": cmode, "diff_mode": mode, "limit": limit},
         )
         return [ClanTopScore(**row) for row in rows]
 
@@ -366,23 +363,21 @@ class ClansRepository:
         mode: int,
         custom_mode: int,
     ) -> list[ClanMemberLeaderboardEntry]:
-        table = get_stats_table(custom_mode)
-        suffix = get_mode_suffix(mode)
+        cmode = combined_mode(mode, custom_mode)
 
-        query = f"""
-            SELECT s.id, u.username, u.country,
-                   s.pp_{suffix} as pp,
-                   s.avg_accuracy_{suffix} as accuracy,
-                   s.playcount_{suffix} as playcount,
-                   s.total_score_{suffix} as total_score
-            FROM user_clans uc
-            INNER JOIN {table} s ON uc.user = s.id
-            INNER JOIN users u ON uc.user = u.id
-            WHERE uc.clan = :clan_id
+        query = """
+            SELECT u.id, u.username, u.country,
+                   s.pp, s.accuracy, s.playcount, s.total_score
+            FROM users u
+            INNER JOIN user_stats s ON s.user_id = u.id AND s.mode = :cmode
+            WHERE u.clan_id = :clan_id
             AND u.public = 1
-            ORDER BY s.pp_{suffix} DESC
+            ORDER BY s.pp DESC
         """
-        rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})
+        rows = await self._mysql.fetch_all(
+            query,
+            {"clan_id": clan_id, "cmode": cmode},
+        )
         return [ClanMemberLeaderboardEntry(**row) for row in rows]
 
     async def get_total_count(self) -> int:
