@@ -307,7 +307,7 @@ class ClansRepository:
             INNER JOIN {table} s ON uc.user = s.id
             INNER JOIN users u ON uc.user = u.id
             WHERE uc.clan = :clan_id
-            AND u.privileges & 1 > 0
+            AND u.public = 1
             ORDER BY s.pp_{suffix} DESC
         """
         rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})
@@ -350,7 +350,7 @@ class ClansRepository:
             AND s.completed = 3
             AND s.pp > 0
             AND b.ranked = 2
-            AND u.privileges & 1 > 0
+            AND u.public = 1
             ORDER BY s.pp DESC
             LIMIT :limit
         """
@@ -379,7 +379,7 @@ class ClansRepository:
             INNER JOIN {table} s ON uc.user = s.id
             INNER JOIN users u ON uc.user = u.id
             WHERE uc.clan = :clan_id
-            AND u.privileges & 1 > 0
+            AND u.public = 1
             ORDER BY s.pp_{suffix} DESC
         """
         rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})

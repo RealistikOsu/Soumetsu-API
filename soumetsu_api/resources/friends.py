@@ -28,7 +28,7 @@ class FriendsRepository:
                FROM users_relationships r
                INNER JOIN users u ON r.user2 = u.id
                WHERE r.user1 = :user_id
-               AND u.privileges & 1 = 1
+               AND u.public = 1
                ORDER BY u.username ASC
                LIMIT :limit OFFSET :offset""",
             {"user_id": user_id, "limit": limit, "offset": offset},
@@ -46,7 +46,7 @@ class FriendsRepository:
                FROM users_relationships r
                INNER JOIN users u ON r.user1 = u.id
                WHERE r.user2 = :user_id
-               AND u.privileges & 1 = 1
+               AND u.public = 1
                ORDER BY u.username ASC
                LIMIT :limit OFFSET :offset""",
             {"user_id": user_id, "limit": limit, "offset": offset},
@@ -89,7 +89,7 @@ class FriendsRepository:
         count = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM users_relationships r
                INNER JOIN users u ON r.user1 = u.id
-               WHERE r.user2 = :user_id AND u.privileges & 1 = 1""",
+               WHERE r.user2 = :user_id AND u.public = 1""",
             {"user_id": user_id},
         )
         return count or 0
@@ -98,7 +98,7 @@ class FriendsRepository:
         count = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM users_relationships r
                INNER JOIN users u ON r.user2 = u.id
-               WHERE r.user1 = :user_id AND u.privileges & 1 = 1""",
+               WHERE r.user1 = :user_id AND u.public = 1""",
             {"user_id": user_id},
         )
         return count or 0

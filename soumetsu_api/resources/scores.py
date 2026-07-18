@@ -310,7 +310,7 @@ class ScoresRepository:
             AND s.completed = 3
             AND s.pp > 0
             AND b.ranked = 2
-            AND u.privileges & 1 > 0
+            AND u.public = 1
             ORDER BY s.pp DESC
             LIMIT :limit OFFSET :offset
         """
@@ -358,7 +358,7 @@ class ScoresRepository:
                      INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
                      INNER JOIN users u ON s.userid = u.id
                      WHERE s.play_mode = {mode} AND s.completed = 3 AND s.pp > 0
-                       AND b.ranked = 2 AND u.privileges & 1 > 0
+                       AND b.ranked = 2 AND u.public = 1
                      ORDER BY s.pp DESC LIMIT 1)
                 """,
                 )

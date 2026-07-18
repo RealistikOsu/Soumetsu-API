@@ -255,7 +255,7 @@ class LeaderboardRepository:
             INNER JOIN beatmaps b ON f.beatmap_md5 = b.beatmap_md5
             WHERE f.mode = :mode
             AND f.relax = :relax
-            AND u.privileges & 1 = 1
+            AND u.public = 1
             ORDER BY f.timestamp ASC
             LIMIT :limit OFFSET :offset
         """
