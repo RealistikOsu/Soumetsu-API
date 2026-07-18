@@ -4,29 +4,36 @@ from enum import IntFlag
 
 
 class UserPrivileges(IntFlag):
-    PUBLIC = 1 << 0
-    NORMAL = 1 << 1
-    DONOR = 1 << 2
-    ADMIN_ACCESS_RAP = 1 << 3
-    ADMIN_MANAGE_USERS = 1 << 4
-    ADMIN_BAN_USERS = 1 << 5
-    ADMIN_SILENCE_USERS = 1 << 6
-    ADMIN_WIPE_USERS = 1 << 7
-    ADMIN_MANAGE_BEATMAP = 1 << 8
-    ADMIN_MANAGE_SERVER = 1 << 9
-    ADMIN_MANAGE_SETTING = 1 << 10
-    ADMIN_MANAGE_BETA_KEY = 1 << 11
-    ADMIN_MANAGE_REPORT = 1 << 12
-    ADMIN_MANAGE_DOCS = 1 << 13
-    ADMIN_MANAGE_BADGES = 1 << 14
-    ADMIN_VIEW_RAP_LOGS = 1 << 15
-    ADMIN_MANAGE_PRIVILEGE = 1 << 16
-    ADMIN_SEND_ALERTS = 1 << 17
-    ADMIN_CHAT_MOD = 1 << 18
-    ADMIN_KICK_USERS = 1 << 19
-    PENDING_VERIFICATION = 1 << 20
-    TOURNAMENT_STAFF = 1 << 21
-    ADMIN_CAKER = 1 << 22
+    # --- canonical v2 bits (docs/reference/privileges.md) ---
+    ACTIVATED = 1 << 0             # 1
+    DONOR = 1 << 1                 # 2
+    ADMIN_MANAGE_USERS = 1 << 2    # 4  (ban/silence/restrict/wipe/kick/chat-mod folded here)
+    ADMIN_VIEW_RAP_LOGS = 1 << 3   # 8
+    ADMIN_MANAGE_REPORT = 1 << 4   # 16
+    ADMIN_MANAGE_CLANS = 1 << 5    # 32
+    ADMIN_SEND_ALERTS = 1 << 6     # 64
+    ADMIN_MANAGE_SETTING = 1 << 7  # 128
+    ADMIN_MANAGE_BADGES = 1 << 8   # 256
+    ADMIN_MANAGE_PRIVILEGE = 1 << 9  # 512
+    DEV_VIEW_ERROR_LOGS = 1 << 10  # 1024
+    TOURNAMENT_STAFF = 1 << 11     # 2048
+    BOT = 1 << 12                  # 4096
+    BN_STD = 1 << 13               # 8192
+    BN_TAIKO = 1 << 14             # 16384
+    BN_CTB = 1 << 15               # 32768
+    BN_MANIA = 1 << 16             # 65536
+
+    # --- legacy aliases (old Ripple names -> v2 bits) so consumers keep working ---
+    NORMAL = ACTIVATED
+    ADMIN_ACCESS_RAP = ADMIN_VIEW_RAP_LOGS
+    ADMIN_BAN_USERS = ADMIN_MANAGE_USERS
+    ADMIN_SILENCE_USERS = ADMIN_MANAGE_USERS
+    ADMIN_WIPE_USERS = ADMIN_MANAGE_USERS
+    ADMIN_KICK_USERS = ADMIN_MANAGE_USERS
+    ADMIN_CHAT_MOD = ADMIN_MANAGE_USERS
+    ADMIN_MANAGE_SERVER = ADMIN_MANAGE_SETTING
+    ADMIN_MANAGE_BETA_KEY = ADMIN_MANAGE_SETTING
+    ADMIN_MANAGE_BEATMAP = BN_STD | BN_TAIKO | BN_CTB | BN_MANIA
 
 
 class TokenPrivileges(IntFlag):
@@ -102,11 +109,13 @@ def has_privilege(privileges: int, required: int) -> bool:
 
 
 def is_restricted(user_privileges: UserPrivileges) -> bool:
-    return not bool(user_privileges & UserPrivileges.NORMAL)
+    return not bool(user_privileges & UserPrivileges.ACTIVATED)
 
 
 def is_pending_verification(user_privileges: UserPrivileges) -> bool:
-    return bool(user_privileges & UserPrivileges.PENDING_VERIFICATION)
+    # v2 has no dedicated pending bit: a not-yet-activated account (ACTIVATED
+    # unset) is pending activation.
+    return not bool(user_privileges & UserPrivileges.ACTIVATED)
 
 
 def is_donor(user_privileges: UserPrivileges) -> bool:
