@@ -471,19 +471,12 @@ async def change_password(
     new_password: str,
     new_email: str | None = None,
 ) -> UserError.OnSuccess[None]:
-    password_data = await ctx.users.get_password_hash(user_id)
-    if not password_data:
+    stored_hash = await ctx.users.get_password_hash(user_id)
+    if not stored_hash:
         return UserError.USER_NOT_FOUND
 
-    stored_hash, version = password_data
-
-    if version == 2:
-        if not await crypto.verify_password(current_password, stored_hash):
-            return UserError.INVALID_PASSWORD
-    else:
-        md5_pass = crypto.hash_token_md5(current_password)
-        if not crypto.verify_password_md5(md5_pass, stored_hash):
-            return UserError.INVALID_PASSWORD
+    if not await crypto.verify_password(current_password, stored_hash):
+        return UserError.INVALID_PASSWORD
 
     if new_password:
         if len(new_password) < 8:

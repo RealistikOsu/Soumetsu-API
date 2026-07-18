@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import override
 
@@ -19,7 +18,6 @@ class AuthError(ServiceError):
     INVALID_CREDENTIALS = "invalid_credentials"
     ACCOUNT_RESTRICTED = "account_restricted"
     ACCOUNT_PENDING = "account_pending"
-    PASSWORD_VERSION_OLD = "password_version_old"
     USERNAME_TAKEN = "username_taken"
     EMAIL_TAKEN = "email_taken"
     USERNAME_RESERVED = "username_reserved"
@@ -39,7 +37,6 @@ class AuthError(ServiceError):
                 AuthError.INVALID_CREDENTIALS
                 | AuthError.ACCOUNT_RESTRICTED
                 | AuthError.ACCOUNT_PENDING
-                | AuthError.PASSWORD_VERSION_OLD
             ):
                 return status.HTTP_403_FORBIDDEN
             case (
@@ -72,10 +69,7 @@ async def login(
     if not user:
         return AuthError.USER_NOT_FOUND
 
-    if user.password_version == 1:
-        return AuthError.PASSWORD_VERSION_OLD
-
-    if not await crypto.verify_password(password, user.password_md5):
+    if not await crypto.verify_password(password, user.password_bcrypt):
         return AuthError.INVALID_CREDENTIALS
 
     user_privs = privileges.UserPrivileges(user.privileges)
@@ -132,24 +126,18 @@ async def register(
         return AuthError.USERNAME_RESERVED
 
     password_hash = await crypto.hash_password(password)
-    api_key = crypto.generate_token(64)
 
-    initial_privileges = (
-        privileges.UserPrivileges.PUBLIC
-        | privileges.UserPrivileges.NORMAL
-        | privileges.UserPrivileges.PENDING_VERIFICATION
-    )
+    # v2 pending activation = ACTIVATED bit unset; the game client's first
+    # login sets ACTIVATED. `public` defaults to 1 at the schema level.
+    initial_privileges = 0
 
     user_id = await ctx.users.create(
         username=username,
         email=email,
         password_hash=password_hash,
-        api_key=api_key,
-        privileges=int(initial_privileges),
-        registered_at=int(time.time()),
+        privileges=initial_privileges,
     )
 
-    await ctx.user_stats.initialise_all(user_id, username)
     await ctx.stats.increment_registered_users()
 
     return RegisterResult(user_id=user_id, username=username)

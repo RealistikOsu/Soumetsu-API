@@ -30,8 +30,7 @@ class UserForLogin(BaseModel):
     id: int
     username: str
     username_safe: str
-    password_md5: str
-    password_version: int
+    password_bcrypt: str
     privileges: int
     email: str
 
@@ -45,7 +44,9 @@ class UserRepository:
     async def find_by_id(self, user_id: int) -> User | None:
         row = await self._mysql.fetch_one(
             """SELECT id, username, username_safe, privileges, country,
-                      register_datetime as registered_at, latest_activity, coins
+                      UNIX_TIMESTAMP(register_time) as registered_at,
+                      COALESCE(UNIX_TIMESTAMP(latest_activity), 0) as latest_activity,
+                      coins
                FROM users WHERE id = :id""",
             {"id": user_id},
         )
@@ -55,7 +56,9 @@ class UserRepository:
         username_safe = safe_username(username)
         row = await self._mysql.fetch_one(
             """SELECT id, username, username_safe, privileges, country,
-                      register_datetime as registered_at, latest_activity, coins
+                      UNIX_TIMESTAMP(register_time) as registered_at,
+                      COALESCE(UNIX_TIMESTAMP(latest_activity), 0) as latest_activity,
+                      coins
                FROM users WHERE username_safe = :username_safe""",
             {"username_safe": username_safe},
         )
@@ -64,16 +67,16 @@ class UserRepository:
     async def find_for_login(self, identifier: str) -> UserForLogin | None:
         if "@" in identifier:
             row = await self._mysql.fetch_one(
-                """SELECT id, username, username_safe, password_md5,
-                          password_version, privileges, email
+                """SELECT id, username, username_safe, password_bcrypt,
+                          privileges, email
                    FROM users WHERE email = :email""",
                 {"email": identifier},
             )
         else:
             username_safe = safe_username(identifier)
             row = await self._mysql.fetch_one(
-                """SELECT id, username, username_safe, password_md5,
-                          password_version, privileges, email
+                """SELECT id, username, username_safe, password_bcrypt,
+                          privileges, email
                    FROM users WHERE username_safe = :username_safe""",
                 {"username_safe": username_safe},
             )
@@ -95,10 +98,9 @@ class UserRepository:
         return count > 0
 
     async def username_in_history(self, username: str) -> bool:
-        username_safe = safe_username(username)
         count = await self._mysql.fetch_val(
-            "SELECT COUNT(*) FROM user_name_history WHERE username_safe = :username_safe",
-            {"username_safe": username_safe},
+            "SELECT COUNT(*) FROM user_name_history WHERE username = :username",
+            {"username": username},
         )
         return count > 0
 
@@ -107,29 +109,35 @@ class UserRepository:
         username: str,
         email: str,
         password_hash: str,
-        api_key: str,
         privileges: int,
-        registered_at: int,
     ) -> int:
         username_safe = safe_username(username)
-        result = await self._mysql.execute(
+        user_id = await self._mysql.execute(
             """INSERT INTO users
-               (username, username_safe, email, password_md5, salt, api_key,
-                privileges, register_datetime, password_version)
+               (username, username_safe, email, password_bcrypt, privileges)
                VALUES
-               (:username, :username_safe, :email, :password_md5, '', :api_key,
-                :privileges, :registered_at, 2)""",
+               (:username, :username_safe, :email, :password_bcrypt, :privileges)""",
             {
                 "username": username,
                 "username_safe": username_safe,
                 "email": email,
-                "password_md5": password_hash,
-                "api_key": api_key,
+                "password_bcrypt": password_hash,
                 "privileges": privileges,
-                "registered_at": registered_at,
             },
         )
-        return result
+
+        # Seed the tall user_stats table (one row per mode 0-7) and a settings row.
+        for mode in range(8):
+            await self._mysql.execute(
+                "INSERT INTO user_stats (user_id, mode) VALUES (:user_id, :mode)",
+                {"user_id": user_id, "mode": mode},
+            )
+        await self._mysql.execute(
+            "INSERT INTO user_settings (user_id) VALUES (:user_id)",
+            {"user_id": user_id},
+        )
+
+        return user_id
 
     async def update_country(self, user_id: int, country: str) -> None:
         await self._mysql.execute(
@@ -148,10 +156,12 @@ class UserRepository:
         username_pattern = f"%{query}%"
         rows = await self._mysql.fetch_all(
             """SELECT id, username, username_safe, privileges, country,
-                      register_datetime as registered_at, latest_activity, coins
+                      UNIX_TIMESTAMP(register_time) as registered_at,
+                      COALESCE(UNIX_TIMESTAMP(latest_activity), 0) as latest_activity,
+                      coins
                FROM users
                WHERE username LIKE :pattern
-               AND privileges & 1 = 1
+               AND public = 1
                ORDER BY latest_activity DESC
                LIMIT :limit OFFSET :offset""",
             {"pattern": username_pattern, "limit": limit, "offset": offset},
@@ -162,8 +172,8 @@ class UserRepository:
         row = await self._mysql.fetch_one(
             """SELECT c.id, c.name, c.tag
                FROM clans c
-               INNER JOIN user_clans uc ON c.id = uc.clan
-               WHERE uc.user = :user_id""",
+               INNER JOIN users u ON u.clan_id = c.id
+               WHERE u.id = :user_id""",
             {"user_id": user_id},
         )
         if not row:
@@ -178,15 +188,13 @@ class UserRepository:
         old_username: str,
     ) -> None:
         new_username_safe = safe_username(new_username)
-        old_username_safe = safe_username(old_username)
 
         await self._mysql.execute(
-            """INSERT INTO user_name_history (user_id, previous_username, previous_username_safe, changed_datetime)
-               VALUES (:user_id, :old_username, :old_username_safe, UNIX_TIMESTAMP())""",
+            """INSERT INTO user_name_history (user_id, username)
+               VALUES (:user_id, :old_username)""",
             {
                 "user_id": user_id,
                 "old_username": old_username,
-                "old_username_safe": old_username_safe,
             },
         )
 
@@ -199,12 +207,6 @@ class UserRepository:
             },
         )
 
-        for table in ("users_stats", "rx_stats", "ap_stats"):
-            await self._mysql.execute(
-                f"UPDATE {table} SET username = :username WHERE id = :id",
-                {"username": new_username, "id": user_id},
-            )
-
     async def get_email(self, user_id: int) -> str | None:
         result = await self._mysql.fetch_val(
             "SELECT email FROM users WHERE id = :id",
@@ -212,18 +214,15 @@ class UserRepository:
         )
         return result
 
-    async def get_password_hash(self, user_id: int) -> tuple[str, int] | None:
-        row = await self._mysql.fetch_one(
-            "SELECT password_md5, password_version FROM users WHERE id = :id",
+    async def get_password_hash(self, user_id: int) -> str | None:
+        return await self._mysql.fetch_val(
+            "SELECT password_bcrypt FROM users WHERE id = :id",
             {"id": user_id},
         )
-        if not row:
-            return None
-        return row["password_md5"], row["password_version"]
 
     async def update_password(self, user_id: int, password_hash: str) -> None:
         await self._mysql.execute(
-            "UPDATE users SET password_md5 = :password_hash, password_version = 2 WHERE id = :id",
+            "UPDATE users SET password_bcrypt = :password_hash WHERE id = :id",
             {"password_hash": password_hash, "id": user_id},
         )
 
