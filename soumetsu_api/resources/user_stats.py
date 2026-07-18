@@ -3,8 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
-from soumetsu_api.constants import get_mode_suffix
-from soumetsu_api.constants import get_stats_table
+from soumetsu_api.constants import combined_mode
 
 
 class UserStatsData(BaseModel):
@@ -40,33 +39,20 @@ class PreferredModeStats(BaseModel):
     playcount: int
 
 
+def _decompose_mode(cmode: int) -> tuple[int, int]:
+    """Clean-schema combined mode 0-7 -> (mode, custom_mode)."""
+    if cmode == 7:
+        return 0, 2  # autopilot std
+    if cmode >= 4:
+        return cmode - 4, 1  # relax std/taiko/ctb
+    return cmode, 0  # vanilla std/taiko/ctb/mania
+
+
 class UserStatsRepository:
     __slots__ = ("_mysql",)
 
     def __init__(self, mysql: ImplementsMySQL) -> None:
         self._mysql = mysql
-
-    def _get_table(self, custom_mode: int) -> str:
-        return get_stats_table(custom_mode)
-
-    def _get_mode_suffix(self, mode: int) -> str:
-        return get_mode_suffix(mode)
-
-    async def initialise_all(self, user_id: int, username: str) -> None:
-        await self._mysql.execute(
-            """INSERT INTO users_stats (id, username) VALUES (:id, :username)""",
-            {"id": user_id, "username": username},
-        )
-
-        await self._mysql.execute(
-            """INSERT INTO rx_stats (id, username) VALUES (:id, :username)""",
-            {"id": user_id, "username": username},
-        )
-
-        await self._mysql.execute(
-            """INSERT INTO ap_stats (id, username) VALUES (:id, :username)""",
-            {"id": user_id, "username": username},
-        )
 
     async def get_stats(
         self,
@@ -74,25 +60,14 @@ class UserStatsRepository:
         mode: int,
         custom_mode: int,
     ) -> UserStatsData | None:
-        table = self._get_table(custom_mode)
-        suffix = self._get_mode_suffix(mode)
-
-        query = f"""
-            SELECT
-                pp_{suffix} as pp,
-                avg_accuracy_{suffix} as accuracy,
-                playcount_{suffix} as playcount,
-                total_score_{suffix} as total_score,
-                ranked_score_{suffix} as ranked_score,
-                total_hits_{suffix} as total_hits,
-                playtime_{suffix} as playtime,
-                max_combo_{suffix} as max_combo,
-                replays_watched_{suffix} as replays_watched,
-                level_{suffix} as level
-            FROM {table}
-            WHERE id = :user_id
+        cmode = combined_mode(mode, custom_mode)
+        query = """
+            SELECT pp, accuracy, playcount, total_score, ranked_score,
+                   total_hits, playtime, max_combo, replays_watched, level
+            FROM user_stats
+            WHERE user_id = :user_id AND mode = :cmode
         """
-        row = await self._mysql.fetch_one(query, {"user_id": user_id})
+        row = await self._mysql.fetch_one(query, {"user_id": user_id, "cmode": cmode})
         if not row:
             return None
 
@@ -115,15 +90,15 @@ class UserStatsRepository:
         mode: int,
         custom_mode: int,
     ) -> int:
+        cmode = combined_mode(mode, custom_mode)
         query = """
             SELECT COUNT(*) FROM first_places
             WHERE user_id = :user_id
-            AND mode = :mode
-            AND relax = :relax
+            AND mode = :cmode
         """
         result = await self._mysql.fetch_val(
             query,
-            {"user_id": user_id, "mode": mode, "relax": custom_mode},
+            {"user_id": user_id, "cmode": cmode},
         )
         return result or 0
 
@@ -132,7 +107,7 @@ class UserStatsRepository:
             """SELECT username_aka, favourite_mode, prefer_relax,
                       play_style, show_country, custom_badge_icon,
                       custom_badge_name, show_custom_badge, can_custom_badge
-               FROM users_stats WHERE id = :user_id""",
+               FROM user_settings WHERE user_id = :user_id""",
             {"user_id": user_id},
         )
         if not row:
@@ -200,74 +175,39 @@ class UserStatsRepository:
         if not updates:
             return
 
-        query = f"UPDATE users_stats SET {', '.join(updates)} WHERE id = :user_id"
+        query = f"UPDATE user_settings SET {', '.join(updates)} WHERE user_id = :user_id"
         await self._mysql.execute(query, params)
 
     async def get_userpage(self, user_id: int) -> str | None:
         result = await self._mysql.fetch_val(
-            "SELECT userpage_content FROM users_stats WHERE id = :user_id",
+            "SELECT userpage_content FROM user_settings WHERE user_id = :user_id",
             {"user_id": user_id},
         )
         return result
 
     async def update_userpage(self, user_id: int, content: str) -> None:
         await self._mysql.execute(
-            "UPDATE users_stats SET userpage_content = :content WHERE id = :user_id",
+            "UPDATE user_settings SET userpage_content = :content WHERE user_id = :user_id",
             {"user_id": user_id, "content": content},
         )
 
     async def get_preferred_mode_stats(self, user_id: int) -> PreferredModeStats | None:
-        """Find the mode combination with highest playcount using a single query."""
-        query = """
-            SELECT
-                vn.playcount_std as vn_std_pc, vn.playcount_taiko as vn_taiko_pc,
-                vn.playcount_ctb as vn_ctb_pc, vn.playcount_mania as vn_mania_pc,
-                vn.pp_std as vn_std_pp, vn.pp_taiko as vn_taiko_pp,
-                vn.pp_ctb as vn_ctb_pp, vn.pp_mania as vn_mania_pp,
-                vn.avg_accuracy_std as vn_std_acc, vn.avg_accuracy_taiko as vn_taiko_acc,
-                vn.avg_accuracy_ctb as vn_ctb_acc, vn.avg_accuracy_mania as vn_mania_acc,
-
-                rx.playcount_std as rx_std_pc, rx.playcount_taiko as rx_taiko_pc,
-                rx.playcount_ctb as rx_ctb_pc,
-                rx.pp_std as rx_std_pp, rx.pp_taiko as rx_taiko_pp,
-                rx.pp_ctb as rx_ctb_pp,
-                rx.avg_accuracy_std as rx_std_acc, rx.avg_accuracy_taiko as rx_taiko_acc,
-                rx.avg_accuracy_ctb as rx_ctb_acc,
-
-                ap.playcount_std as ap_std_pc,
-                ap.pp_std as ap_std_pp,
-                ap.avg_accuracy_std as ap_std_acc
-            FROM users_stats vn
-            LEFT JOIN rx_stats rx ON vn.id = rx.id
-            LEFT JOIN ap_stats ap ON vn.id = ap.id
-            WHERE vn.id = :user_id
-        """
-        row = await self._mysql.fetch_one(query, {"user_id": user_id})
-        if not row:
+        """Pick the mode (0-7) with the highest playcount from tall user_stats."""
+        rows = await self._mysql.fetch_all(
+            """SELECT mode, pp, accuracy, playcount
+               FROM user_stats WHERE user_id = :user_id""",
+            {"user_id": user_id},
+        )
+        if not rows:
             return None
 
-        # All 8 valid mode combinations: (custom_mode, mode, pc_key, pp_key, acc_key)
-        combinations = [
-            (0, 0, "vn_std_pc", "vn_std_pp", "vn_std_acc"),
-            (0, 1, "vn_taiko_pc", "vn_taiko_pp", "vn_taiko_acc"),
-            (0, 2, "vn_ctb_pc", "vn_ctb_pp", "vn_ctb_acc"),
-            (0, 3, "vn_mania_pc", "vn_mania_pp", "vn_mania_acc"),
-            (1, 0, "rx_std_pc", "rx_std_pp", "rx_std_acc"),
-            (1, 1, "rx_taiko_pc", "rx_taiko_pp", "rx_taiko_acc"),
-            (1, 2, "rx_ctb_pc", "rx_ctb_pp", "rx_ctb_acc"),
-            (2, 0, "ap_std_pc", "ap_std_pp", "ap_std_acc"),
-        ]
-
-        best = (0, 0, 0, 0.0, 0)  # (custom_mode, mode, pp, acc, playcount)
-        for cm, m, pc_key, pp_key, acc_key in combinations:
-            pc = row[pc_key] or 0
-            if pc > best[4]:
-                best = (cm, m, row[pp_key] or 0, row[acc_key] or 0.0, pc)
+        best = max(rows, key=lambda r: r["playcount"] or 0)
+        mode, custom_mode = _decompose_mode(best["mode"])
 
         return PreferredModeStats(
-            custom_mode=best[0],
-            mode=best[1],
-            pp=best[2],
-            accuracy=best[3],
-            playcount=best[4],
+            mode=mode,
+            custom_mode=custom_mode,
+            pp=best["pp"] or 0,
+            accuracy=best["accuracy"] or 0.0,
+            playcount=best["playcount"] or 0,
         )
