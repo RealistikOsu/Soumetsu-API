@@ -1,12 +1,42 @@
 from __future__ import annotations
 
-import time as time_module
-
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.constants import combined_mode
 
-SCORE_TABLES = ["scores", "scores_relax", "scores_ap"]
+# Columns pulled from the clean `scores` table, aliased to the model field
+# names the API layer already expects.
+_SCORE_COLUMNS = """
+    s.id, s.beatmap_md5, s.user_id as player_id, s.score, s.max_combo,
+    s.full_combo, s.mods, s.count_300, s.count_100, s.count_50,
+    s.count_katu as count_katus, s.count_geki as count_gekis,
+    s.count_miss as count_misses,
+    UNIX_TIMESTAMP(s.submitted_at) as submitted_at, s.mode as play_mode,
+    s.status as completed, s.accuracy, s.pp, s.playtime, s.playback_rate
+"""
+
+# Split-beatmap columns + join clause (composed song_name; per-mode stars).
+_BEATMAP_COLUMNS = """
+    b.id as beatmap_id, b.set_id as beatmapset_id,
+    CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') as song_name,
+    bd.stars as difficulty, b.status as ranked
+"""
+
+_BEATMAP_JOIN = """
+    INNER JOIN beatmaps b ON s.beatmap_md5 = b.md5
+    INNER JOIN beatmapsets bs ON b.set_id = bs.id
+    LEFT JOIN beatmap_difficulty bd ON bd.beatmap_id = b.id AND bd.mode = :diff_mode
+"""
+
+
+def _decompose_mode(cmode: int) -> tuple[int, int]:
+    """Clean-schema combined mode 0-7 -> (mode, custom_mode)."""
+    if cmode == 7:
+        return 0, 2
+    if cmode >= 4:
+        return cmode - 4, 1
+    return cmode, 0
 
 
 class ScoreData(BaseModel):
@@ -64,24 +94,15 @@ class ScoresRepository:
     def __init__(self, mysql: ImplementsMySQL) -> None:
         self._mysql = mysql
 
-    def _get_table(self, custom_mode: int) -> str:
-        return SCORE_TABLES[custom_mode]
-
     async def find_by_id(
         self,
         score_id: int,
         custom_mode: int,
     ) -> ScoreData | None:
-        table = self._get_table(custom_mode)
         query = f"""
-            SELECT id, beatmap_md5, userid as player_id, score, max_combo,
-                   full_combo, mods, 300_count as count_300,
-                   100_count as count_100, 50_count as count_50,
-                   katus_count as count_katus, gekis_count as count_gekis,
-                   misses_count as count_misses, time as submitted_at, play_mode,
-                   completed, accuracy, pp, playtime, playback_rate
-            FROM {table}
-            WHERE id = :score_id
+            SELECT {_SCORE_COLUMNS}
+            FROM scores s
+            WHERE s.id = :score_id
         """
         row = await self._mysql.fetch_one(query, {"score_id": score_id})
         if not row:
@@ -97,35 +118,27 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(custom_mode)
-        diff_col = [
-            "difficulty_std",
-            "difficulty_taiko",
-            "difficulty_ctb",
-            "difficulty_mania",
-        ][mode]
-
+        cmode = combined_mode(mode, custom_mode)
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
-                   s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
-                   s.100_count as count_100, s.50_count as count_50,
-                   s.katus_count as count_katus, s.gekis_count as count_gekis,
-                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
-                   b.beatmap_id, b.beatmapset_id, b.song_name,
-                   b.{diff_col} as difficulty, b.ranked
-            FROM {table} s
-            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-            WHERE s.userid = :player_id
-            AND s.play_mode = :mode
-            AND s.completed = 3
-            AND b.ranked = 2
+            SELECT {_SCORE_COLUMNS}, {_BEATMAP_COLUMNS}
+            FROM scores s
+            {_BEATMAP_JOIN}
+            WHERE s.user_id = :player_id
+            AND s.mode = :cmode
+            AND s.status = 3
+            AND b.status = 2
             ORDER BY s.pp DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"player_id": player_id, "mode": mode, "limit": limit, "offset": offset},
+            {
+                "player_id": player_id,
+                "cmode": cmode,
+                "diff_mode": mode,
+                "limit": limit,
+                "offset": offset,
+            },
         )
         return [ScoreWithBeatmap(**row) for row in rows]
 
@@ -137,33 +150,25 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(custom_mode)
-        diff_col = [
-            "difficulty_std",
-            "difficulty_taiko",
-            "difficulty_ctb",
-            "difficulty_mania",
-        ][mode]
-
+        cmode = combined_mode(mode, custom_mode)
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
-                   s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
-                   s.100_count as count_100, s.50_count as count_50,
-                   s.katus_count as count_katus, s.gekis_count as count_gekis,
-                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
-                   b.beatmap_id, b.beatmapset_id, b.song_name,
-                   b.{diff_col} as difficulty, b.ranked
-            FROM {table} s
-            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-            WHERE s.userid = :player_id
-            AND s.play_mode = :mode
-            ORDER BY s.time DESC
+            SELECT {_SCORE_COLUMNS}, {_BEATMAP_COLUMNS}
+            FROM scores s
+            {_BEATMAP_JOIN}
+            WHERE s.user_id = :player_id
+            AND s.mode = :cmode
+            ORDER BY s.submitted_at DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"player_id": player_id, "mode": mode, "limit": limit, "offset": offset},
+            {
+                "player_id": player_id,
+                "cmode": cmode,
+                "diff_mode": mode,
+                "limit": limit,
+                "offset": offset,
+            },
         )
         return [ScoreWithBeatmap(**row) for row in rows]
 
@@ -175,38 +180,23 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(custom_mode)
-        diff_col = [
-            "difficulty_std",
-            "difficulty_taiko",
-            "difficulty_ctb",
-            "difficulty_mania",
-        ][mode]
-
+        cmode = combined_mode(mode, custom_mode)
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
-                   s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
-                   s.100_count as count_100, s.50_count as count_50,
-                   s.katus_count as count_katus, s.gekis_count as count_gekis,
-                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
-                   b.beatmap_id, b.beatmapset_id, b.song_name,
-                   b.{diff_col} as difficulty, b.ranked
+            SELECT {_SCORE_COLUMNS}, {_BEATMAP_COLUMNS}
             FROM first_places f
-            INNER JOIN {table} s ON f.score_id = s.id
-            INNER JOIN beatmaps b ON f.beatmap_md5 = b.beatmap_md5
+            INNER JOIN scores s ON f.score_id = s.id
+            {_BEATMAP_JOIN}
             WHERE f.user_id = :player_id
-            AND f.mode = :mode
-            AND f.relax = :relax
-            ORDER BY f.timestamp DESC
+            AND f.mode = :cmode
+            ORDER BY s.submitted_at DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
             query,
             {
                 "player_id": player_id,
-                "mode": mode,
-                "relax": custom_mode,
+                "cmode": cmode,
+                "diff_mode": mode,
                 "limit": limit,
                 "offset": offset,
             },
@@ -221,60 +211,47 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        table = self._get_table(custom_mode)
-        diff_col = [
-            "difficulty_std",
-            "difficulty_taiko",
-            "difficulty_ctb",
-            "difficulty_mania",
-        ][mode]
-
+        cmode = combined_mode(mode, custom_mode)
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
-                   s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
-                   s.100_count as count_100, s.50_count as count_50,
-                   s.katus_count as count_katus, s.gekis_count as count_gekis,
-                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
-                   b.beatmap_id, b.beatmapset_id, b.song_name,
-                   b.{diff_col} as difficulty, b.ranked
+            SELECT {_SCORE_COLUMNS}, {_BEATMAP_COLUMNS}
             FROM user_pinned p
-            INNER JOIN {table} s ON p.scoreid = s.id
-            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-            WHERE p.userid = :player_id
-            AND s.play_mode = :mode
-            ORDER BY p.pin_date DESC
+            INNER JOIN scores s ON p.score_id = s.id
+            {_BEATMAP_JOIN}
+            WHERE p.user_id = :player_id
+            AND s.mode = :cmode
+            ORDER BY p.pinned_at DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"player_id": player_id, "mode": mode, "limit": limit, "offset": offset},
+            {
+                "player_id": player_id,
+                "cmode": cmode,
+                "diff_mode": mode,
+                "limit": limit,
+                "offset": offset,
+            },
         )
         return [ScoreWithBeatmap(**row) for row in rows]
 
     async def is_pinned(self, player_id: int, score_id: int) -> bool:
         count = await self._mysql.fetch_val(
-            "SELECT COUNT(*) FROM user_pinned WHERE userid = :player_id AND scoreid = :score_id",
+            "SELECT COUNT(*) FROM user_pinned WHERE user_id = :player_id AND score_id = :score_id",
             {"player_id": player_id, "score_id": score_id},
         )
         return count > 0
 
     async def pin_score(self, player_id: int, score_id: int) -> None:
-        pinned_at = str(int(time_module.time()))
         await self._mysql.execute(
-            """INSERT INTO user_pinned (userid, scoreid, pin_date)
-               VALUES (:player_id, :score_id, :pinned_at)
-               ON DUPLICATE KEY UPDATE pin_date = :pinned_at""",
-            {
-                "player_id": player_id,
-                "score_id": score_id,
-                "pinned_at": pinned_at,
-            },
+            """INSERT INTO user_pinned (user_id, score_id)
+               VALUES (:player_id, :score_id)
+               ON DUPLICATE KEY UPDATE pinned_at = CURRENT_TIMESTAMP""",
+            {"player_id": player_id, "score_id": score_id},
         )
 
     async def unpin_score(self, player_id: int, score_id: int) -> None:
         await self._mysql.execute(
-            "DELETE FROM user_pinned WHERE userid = :player_id AND scoreid = :score_id",
+            "DELETE FROM user_pinned WHERE user_id = :player_id AND score_id = :score_id",
             {"player_id": player_id, "score_id": score_id},
         )
 
@@ -285,86 +262,53 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreTopPlay]:
-        table = self._get_table(custom_mode)
-        diff_col = [
-            "difficulty_std",
-            "difficulty_taiko",
-            "difficulty_ctb",
-            "difficulty_mania",
-        ][mode]
-
+        cmode = combined_mode(mode, custom_mode)
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
-                   s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
-                   s.100_count as count_100, s.50_count as count_50,
-                   s.katus_count as count_katus, s.gekis_count as count_gekis,
-                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
-                   b.beatmap_id, b.beatmapset_id, b.song_name,
-                   b.{diff_col} as difficulty, b.ranked,
-                   u.username
-            FROM {table} s
-            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-            INNER JOIN users u ON s.userid = u.id
-            WHERE s.play_mode = :mode
-            AND s.completed = 3
+            SELECT {_SCORE_COLUMNS}, {_BEATMAP_COLUMNS}, u.username
+            FROM scores s
+            {_BEATMAP_JOIN}
+            INNER JOIN users u ON s.user_id = u.id
+            WHERE s.mode = :cmode
+            AND s.status = 3
             AND s.pp > 0
-            AND b.ranked = 2
+            AND b.status = 2
             AND u.public = 1
             ORDER BY s.pp DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"mode": mode, "limit": limit, "offset": offset},
+            {"cmode": cmode, "diff_mode": mode, "limit": limit, "offset": offset},
         )
         return [ScoreTopPlay(**row) for row in rows]
 
     async def list_top_plays_all_modes(self) -> list[ScoreTopPlayWithMode]:
-        # Valid combinations:
-        # custom_mode 0 (vanilla): modes 0,1,2,3 (std, taiko, ctb, mania)
-        # custom_mode 1 (relax): modes 0,1,2 (std, taiko, ctb)
-        # custom_mode 2 (autopilot): mode 0 only (std)
-        diff_cols = [
-            "difficulty_std",
-            "difficulty_taiko",
-            "difficulty_ctb",
-            "difficulty_mania",
-        ]
-
+        # One top play per combined mode 0-7.
         mode_queries = []
-        for custom_mode, table in enumerate(SCORE_TABLES):
-            if custom_mode == 0:
-                modes = [0, 1, 2, 3]
-            elif custom_mode == 1:
-                modes = [0, 1, 2]
-            else:
-                modes = [0]
-
-            for mode in modes:
-                diff_col = diff_cols[mode]
-                mode_queries.append(
-                    f"""
-                    (SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
-                            s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
-                            s.100_count as count_100, s.50_count as count_50,
-                            s.katus_count as count_katus, s.gekis_count as count_gekis,
-                            s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                            s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
-                            b.beatmap_id, b.beatmapset_id, b.song_name,
-                            b.{diff_col} as difficulty, b.ranked,
-                            u.username, {custom_mode} as custom_mode
-                     FROM {table} s
-                     INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-                     INNER JOIN users u ON s.userid = u.id
-                     WHERE s.play_mode = {mode} AND s.completed = 3 AND s.pp > 0
-                       AND b.ranked = 2 AND u.public = 1
-                     ORDER BY s.pp DESC LIMIT 1)
-                """,
-                )
+        params: dict[str, int] = {}
+        for cmode in range(8):
+            vmode, custom_mode = _decompose_mode(cmode)
+            params[f"diff_mode_{cmode}"] = vmode
+            mode_queries.append(
+                f"""
+                (SELECT {_SCORE_COLUMNS},
+                        b.id as beatmap_id, b.set_id as beatmapset_id,
+                        CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') as song_name,
+                        bd.stars as difficulty, b.status as ranked,
+                        u.username, {custom_mode} as custom_mode
+                 FROM scores s
+                 INNER JOIN beatmaps b ON s.beatmap_md5 = b.md5
+                 INNER JOIN beatmapsets bs ON b.set_id = bs.id
+                 LEFT JOIN beatmap_difficulty bd ON bd.beatmap_id = b.id AND bd.mode = :diff_mode_{cmode}
+                 INNER JOIN users u ON s.user_id = u.id
+                 WHERE s.mode = {cmode} AND s.status = 3 AND s.pp > 0
+                   AND b.status = 2 AND u.public = 1
+                 ORDER BY s.pp DESC LIMIT 1)
+            """,
+            )
 
         query = " UNION ALL ".join(mode_queries) + " ORDER BY pp DESC"
-        rows = await self._mysql.fetch_all(query, {})
+        rows = await self._mysql.fetch_all(query, params)
         return [ScoreTopPlayWithMode(**row) for row in rows]
 
     async def list_beatmap_scores(
@@ -375,21 +319,15 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithPlayer]:
-        table = self._get_table(custom_mode)
-
+        cmode = combined_mode(mode, custom_mode)
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score, s.max_combo,
-                   s.full_combo, s.mods, s.300_count as count_300,
-                   s.100_count as count_100, s.50_count as count_50,
-                   s.katus_count as count_katus, s.gekis_count as count_gekis,
-                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+            SELECT {_SCORE_COLUMNS},
                    u.id as player_db_id, u.username, u.country
-            FROM {table} s
-            INNER JOIN users u ON s.userid = u.id
+            FROM scores s
+            INNER JOIN users u ON s.user_id = u.id
             WHERE s.beatmap_md5 = :beatmap_md5
-            AND s.play_mode = :mode
-            AND s.completed = 3
+            AND s.mode = :cmode
+            AND s.status = 3
             ORDER BY s.pp DESC
             LIMIT :limit OFFSET :offset
         """
@@ -397,7 +335,7 @@ class ScoresRepository:
             query,
             {
                 "beatmap_md5": beatmap_md5,
-                "mode": mode,
+                "cmode": cmode,
                 "limit": limit,
                 "offset": offset,
             },

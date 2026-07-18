@@ -4,8 +4,8 @@ from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.adapters.redis import RedisClient
+from soumetsu_api.constants import combined_mode
 from soumetsu_api.constants import get_mode_suffix
-from soumetsu_api.constants import get_stats_table
 
 
 class LeaderboardModeStats(BaseModel):
@@ -187,21 +187,19 @@ class LeaderboardRepository:
         if not user_ids:
             return []
 
-        table = get_stats_table(custom_mode)
-        suffix = get_mode_suffix(mode)
+        cmode = combined_mode(mode, custom_mode)
 
         placeholders = ", ".join(f":id_{i}" for i in range(len(user_ids)))
         params = {f"id_{i}": int(uid) for i, uid in enumerate(user_ids)}
+        params["cmode"] = cmode
 
         query = f"""
-            SELECT s.id, u.username, u.country, u.privileges,
-                   s.pp_{suffix} as pp,
-                   s.avg_accuracy_{suffix} as accuracy,
-                   s.playcount_{suffix} as playcount,
-                   s.total_score_{suffix} as total_score
-            FROM {table} s
-            INNER JOIN users u ON s.id = u.id
-            WHERE s.id IN ({placeholders})
+            SELECT u.id as id, u.username, u.country, u.privileges,
+                   s.pp, s.accuracy, s.playcount, s.total_score
+            FROM user_stats s
+            INNER JOIN users u ON s.user_id = u.id
+            WHERE s.user_id IN ({placeholders})
+            AND s.mode = :cmode
         """
 
         rows = await self._mysql.fetch_all(query, params)
@@ -247,21 +245,24 @@ class LeaderboardRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[FirstPlaceEntry]:
+        cmode = combined_mode(mode, custom_mode)
         query = """
             SELECT f.user_id as player_id, u.username, f.score_id, f.beatmap_md5,
-                   b.song_name, f.pp, f.timestamp as achieved_at, f.mode
+                   CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') as song_name,
+                   f.pp, UNIX_TIMESTAMP(s.submitted_at) as achieved_at, f.mode
             FROM first_places f
             INNER JOIN users u ON f.user_id = u.id
-            INNER JOIN beatmaps b ON f.beatmap_md5 = b.beatmap_md5
-            WHERE f.mode = :mode
-            AND f.relax = :relax
+            INNER JOIN scores s ON f.score_id = s.id
+            INNER JOIN beatmaps b ON f.beatmap_md5 = b.md5
+            INNER JOIN beatmapsets bs ON b.set_id = bs.id
+            WHERE f.mode = :cmode
             AND u.public = 1
-            ORDER BY f.timestamp ASC
+            ORDER BY s.submitted_at ASC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
             query,
-            {"mode": mode, "relax": custom_mode, "limit": limit, "offset": offset},
+            {"cmode": cmode, "limit": limit, "offset": offset},
         )
 
         return [FirstPlaceEntry(**row) for row in rows]

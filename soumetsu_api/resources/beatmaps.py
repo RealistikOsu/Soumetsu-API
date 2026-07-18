@@ -5,6 +5,33 @@ import time as time_module
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.constants import combined_mode
+
+# Reconstruct the flat beatmap row the API expects from the split
+# beatmapsets/beatmaps/beatmap_difficulty tables. song_name is composed;
+# per-mode star ratings are pivoted from beatmap_difficulty.
+_BEATMAP_SELECT = """
+    b.id as beatmap_id, b.set_id as beatmapset_id, b.md5 as beatmap_md5,
+    CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') as song_name,
+    b.ar, b.od, b.mode,
+    COALESCE(d0.stars, 0) as difficulty_std,
+    COALESCE(d1.stars, 0) as difficulty_taiko,
+    COALESCE(d2.stars, 0) as difficulty_ctb,
+    COALESCE(d3.stars, 0) as difficulty_mania,
+    b.max_combo, b.hit_length, CAST(b.bpm AS UNSIGNED) as bpm,
+    b.playcount, b.passcount, b.status as ranked,
+    COALESCE(UNIX_TIMESTAMP(bs.last_update), 0) as updated_at,
+    b.status_frozen as ranked_status_frozen, COALESCE(bs.mapper_id, 0) as mapper_id
+"""
+
+_BEATMAP_FROM = """
+    FROM beatmaps b
+    INNER JOIN beatmapsets bs ON b.set_id = bs.id
+    LEFT JOIN beatmap_difficulty d0 ON d0.beatmap_id = b.id AND d0.mode = 0
+    LEFT JOIN beatmap_difficulty d1 ON d1.beatmap_id = b.id AND d1.mode = 1
+    LEFT JOIN beatmap_difficulty d2 ON d2.beatmap_id = b.id AND d2.mode = 2
+    LEFT JOIN beatmap_difficulty d3 ON d3.beatmap_id = b.id AND d3.mode = 3
+"""
 
 
 class BeatmapData(BaseModel):
@@ -75,13 +102,9 @@ class BeatmapsRepository:
 
     async def find_by_id(self, beatmap_id: int) -> BeatmapData | None:
         row = await self._mysql.fetch_one(
-            """SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
-                      ar, od, mode, difficulty_std, difficulty_taiko,
-                      difficulty_ctb, difficulty_mania, max_combo,
-                      hit_length, bpm, playcount, passcount, ranked,
-                      latest_update as updated_at,
-                      ranked_status_freezed as ranked_status_frozen, mapper_id
-               FROM beatmaps WHERE beatmap_id = :beatmap_id""",
+            f"""SELECT {_BEATMAP_SELECT}
+                {_BEATMAP_FROM}
+                WHERE b.id = :beatmap_id""",
             {"beatmap_id": beatmap_id},
         )
         if not row:
@@ -91,13 +114,9 @@ class BeatmapsRepository:
 
     async def find_by_md5(self, beatmap_md5: str) -> BeatmapData | None:
         row = await self._mysql.fetch_one(
-            """SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
-                      ar, od, mode, difficulty_std, difficulty_taiko,
-                      difficulty_ctb, difficulty_mania, max_combo,
-                      hit_length, bpm, playcount, passcount, ranked,
-                      latest_update as updated_at,
-                      ranked_status_freezed as ranked_status_frozen, mapper_id
-               FROM beatmaps WHERE beatmap_md5 = :beatmap_md5""",
+            f"""SELECT {_BEATMAP_SELECT}
+                {_BEATMAP_FROM}
+                WHERE b.md5 = :beatmap_md5""",
             {"beatmap_md5": beatmap_md5},
         )
         if not row:
@@ -117,29 +136,26 @@ class BeatmapsRepository:
         params: dict[str, str | int] = {"limit": limit, "offset": offset}
 
         if query:
-            conditions.append("song_name LIKE :query")
+            conditions.append(
+                "CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') LIKE :query",
+            )
             params["query"] = f"%{query}%"
 
         if mode is not None:
-            conditions.append("mode = :mode")
+            conditions.append("b.mode = :mode")
             params["mode"] = mode
 
         if status is not None:
-            conditions.append("ranked = :status")
+            conditions.append("b.status = :status")
             params["status"] = status
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         rows = await self._mysql.fetch_all(
-            f"""SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
-                       ar, od, mode, difficulty_std, difficulty_taiko,
-                       difficulty_ctb, difficulty_mania, max_combo,
-                       hit_length, bpm, playcount, passcount, ranked,
-                       latest_update as updated_at,
-                       ranked_status_freezed as ranked_status_frozen, mapper_id
-                FROM beatmaps
+            f"""SELECT {_BEATMAP_SELECT}
+                {_BEATMAP_FROM}
                 WHERE {where_clause}
-                ORDER BY playcount DESC
+                ORDER BY b.playcount DESC
                 LIMIT :limit OFFSET :offset""",
             params,
         )
@@ -151,25 +167,20 @@ class BeatmapsRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[BeatmapData]:
-        conditions = ["ranked IN (2, 3, 4, 5)"]
+        conditions = ["b.status IN (2, 3, 4, 5)"]
         params: dict[str, int] = {"limit": limit, "offset": offset}
 
         if mode is not None:
-            conditions.append("mode = :mode")
+            conditions.append("b.mode = :mode")
             params["mode"] = mode
 
         where_clause = " AND ".join(conditions)
 
         rows = await self._mysql.fetch_all(
-            f"""SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
-                       ar, od, mode, difficulty_std, difficulty_taiko,
-                       difficulty_ctb, difficulty_mania, max_combo,
-                       hit_length, bpm, playcount, passcount, ranked,
-                       latest_update as updated_at,
-                       ranked_status_freezed as ranked_status_frozen, mapper_id
-                FROM beatmaps
+            f"""SELECT {_BEATMAP_SELECT}
+                {_BEATMAP_FROM}
                 WHERE {where_clause}
-                ORDER BY playcount DESC
+                ORDER BY b.playcount DESC
                 LIMIT :limit OFFSET :offset""",
             params,
         )
@@ -180,14 +191,10 @@ class BeatmapsRepository:
         beatmapset_id: int,
     ) -> list[BeatmapData]:
         rows = await self._mysql.fetch_all(
-            """SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
-                      ar, od, mode, difficulty_std, difficulty_taiko,
-                      difficulty_ctb, difficulty_mania, max_combo,
-                      hit_length, bpm, playcount, passcount, ranked,
-                      latest_update as updated_at,
-                      ranked_status_freezed as ranked_status_frozen, mapper_id
-               FROM beatmaps WHERE beatmapset_id = :beatmapset_id
-               ORDER BY difficulty_std ASC""",
+            f"""SELECT {_BEATMAP_SELECT}
+                {_BEATMAP_FROM}
+                WHERE b.set_id = :beatmapset_id
+                ORDER BY COALESCE(d0.stars, 0) ASC""",
             {"beatmapset_id": beatmapset_id},
         )
         return [BeatmapData(**row) for row in rows]
@@ -200,21 +207,21 @@ class BeatmapsRepository:
         limit: int = 5,
         offset: int = 0,
     ) -> list[MostPlayedBeatmapData]:
-        # Select table based on custom_mode
-        scores_tables = ["scores", "scores_relax", "scores_ap"]
-        scores_table = scores_tables[custom_mode]
+        cmode = combined_mode(mode, custom_mode)
 
         rows = await self._mysql.fetch_all(
-            f"""SELECT b.beatmap_id, b.beatmapset_id, b.song_name,
-                       COUNT(*) as playcount
-                FROM {scores_table} s
-                INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-                WHERE s.userid = :user_id
-                AND s.play_mode = :mode
-                GROUP BY s.beatmap_md5
-                ORDER BY playcount DESC
-                LIMIT :limit OFFSET :offset""",
-            {"user_id": user_id, "mode": mode, "limit": limit, "offset": offset},
+            """SELECT b.id as beatmap_id, b.set_id as beatmapset_id,
+                      CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') as song_name,
+                      COUNT(*) as playcount
+               FROM scores s
+               INNER JOIN beatmaps b ON s.beatmap_md5 = b.md5
+               INNER JOIN beatmapsets bs ON b.set_id = bs.id
+               WHERE s.user_id = :user_id
+               AND s.mode = :cmode
+               GROUP BY s.beatmap_md5
+               ORDER BY playcount DESC
+               LIMIT :limit OFFSET :offset""",
+            {"user_id": user_id, "cmode": cmode, "limit": limit, "offset": offset},
         )
         return [MostPlayedBeatmapData(**row) for row in rows]
 
@@ -223,7 +230,7 @@ class BeatmapsRepository:
 
         result = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM rank_requests
-               WHERE blacklisted = 0 AND time >= :today_start""",
+               WHERE blacklisted = 0 AND requested_at >= FROM_UNIXTIME(:today_start)""",
             {"today_start": today_start},
         )
         return result or 0
@@ -233,7 +240,8 @@ class BeatmapsRepository:
 
         result = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM rank_requests
-               WHERE userid = :requester_id AND time >= :today_start""",
+               WHERE user_id = :requester_id
+               AND requested_at >= FROM_UNIXTIME(:today_start)""",
             {"requester_id": requester_id, "today_start": today_start},
         )
         return result or 0
@@ -244,10 +252,11 @@ class BeatmapsRepository:
         request_type: str,
     ) -> RankRequestData | None:
         row = await self._mysql.fetch_one(
-            """SELECT id, userid as requester_id, bid as beatmap_id,
-                      type as request_type, time as requested_at, blacklisted
+            """SELECT id, user_id as requester_id, beatmap_id,
+                      type as request_type,
+                      UNIX_TIMESTAMP(requested_at) as requested_at, blacklisted
                FROM rank_requests
-               WHERE bid = :beatmap_id AND type = :request_type""",
+               WHERE beatmap_id = :beatmap_id AND type = :request_type""",
             {"beatmap_id": beatmap_id, "request_type": request_type},
         )
         if not row:
@@ -260,15 +269,13 @@ class BeatmapsRepository:
         beatmap_id: int,
         request_type: str,
     ) -> int:
-        requested_at = int(time_module.time())
         await self._mysql.execute(
-            """INSERT INTO rank_requests (userid, bid, type, time, blacklisted)
-               VALUES (:requester_id, :beatmap_id, :request_type, :requested_at, 0)""",
+            """INSERT INTO rank_requests (user_id, beatmap_id, type, blacklisted)
+               VALUES (:requester_id, :beatmap_id, :request_type, 0)""",
             {
                 "requester_id": requester_id,
                 "beatmap_id": beatmap_id,
                 "request_type": request_type,
-                "requested_at": requested_at,
             },
         )
         result = await self._mysql.fetch_val("SELECT LAST_INSERT_ID()")
@@ -289,18 +296,20 @@ class BeatmapsRepository:
         today_start = requested_at - (requested_at % 86400)
 
         result = await self._mysql.execute(
-            """INSERT INTO rank_requests (userid, bid, type, time, blacklisted)
-               SELECT :requester_id, :beatmap_id, :request_type, :requested_at, 0
+            """INSERT INTO rank_requests (user_id, beatmap_id, type, blacklisted)
+               SELECT :requester_id, :beatmap_id, :request_type, 0
                FROM dual
                WHERE (
-                   SELECT COUNT(*) FROM rank_requests
-                   WHERE userid = :requester_id AND time >= :today_start
+                   SELECT COUNT(*) FROM (
+                       SELECT id FROM rank_requests
+                       WHERE user_id = :requester_id
+                       AND requested_at >= FROM_UNIXTIME(:today_start)
+                   ) AS todays_requests
                ) < :daily_limit""",
             {
                 "requester_id": requester_id,
                 "beatmap_id": beatmap_id,
                 "request_type": request_type,
-                "requested_at": requested_at,
                 "today_start": today_start,
                 "daily_limit": daily_limit,
             },
@@ -319,8 +328,9 @@ class BeatmapsRepository:
         today_start = int(time_module.time()) - (int(time_module.time()) % 86400)
 
         result = await self._mysql.fetch_val(
-            """SELECT MIN(time) FROM rank_requests
-               WHERE userid = :requester_id AND time >= :today_start""",
+            """SELECT UNIX_TIMESTAMP(MIN(requested_at)) FROM rank_requests
+               WHERE user_id = :requester_id
+               AND requested_at >= FROM_UNIXTIME(:today_start)""",
             {"requester_id": requester_id, "today_start": today_start},
         )
         return result
@@ -331,32 +341,37 @@ class BeatmapsRepository:
         offset: int = 0,
     ) -> list[RankRequestWithBeatmapData]:
         rows = await self._mysql.fetch_all(
-            """SELECT
+            f"""SELECT
                 r.id as request_id,
                 r.type as request_type,
-                r.time as requested_at,
-                b.beatmap_id,
-                b.beatmapset_id,
-                b.song_name,
+                UNIX_TIMESTAMP(r.requested_at) as requested_at,
+                b.id as beatmap_id,
+                b.set_id as beatmapset_id,
+                CONCAT(bs.artist, ' - ', bs.title, ' [', b.version, ']') as song_name,
                 b.ar,
                 b.od,
                 b.mode,
-                b.difficulty_std,
-                b.difficulty_taiko,
-                b.difficulty_ctb,
-                b.difficulty_mania,
+                COALESCE(d0.stars, 0) as difficulty_std,
+                COALESCE(d1.stars, 0) as difficulty_taiko,
+                COALESCE(d2.stars, 0) as difficulty_ctb,
+                COALESCE(d3.stars, 0) as difficulty_mania,
                 b.max_combo,
                 b.hit_length,
-                b.bpm,
-                b.ranked,
-                b.mapper_id
+                CAST(b.bpm AS UNSIGNED) as bpm,
+                b.status as ranked,
+                COALESCE(bs.mapper_id, 0) as mapper_id
             FROM rank_requests r
             INNER JOIN beatmaps b ON (
-                (r.type = 'b' AND b.beatmap_id = r.bid)
-                OR (r.type = 's' AND b.beatmapset_id = r.bid)
+                (r.type = 'b' AND b.id = r.beatmap_id)
+                OR (r.type = 's' AND b.set_id = r.beatmap_id)
             )
+            INNER JOIN beatmapsets bs ON b.set_id = bs.id
+            LEFT JOIN beatmap_difficulty d0 ON d0.beatmap_id = b.id AND d0.mode = 0
+            LEFT JOIN beatmap_difficulty d1 ON d1.beatmap_id = b.id AND d1.mode = 1
+            LEFT JOIN beatmap_difficulty d2 ON d2.beatmap_id = b.id AND d2.mode = 2
+            LEFT JOIN beatmap_difficulty d3 ON d3.beatmap_id = b.id AND d3.mode = 3
             WHERE r.blacklisted = 0
-            ORDER BY r.time DESC, r.id DESC, b.difficulty_std ASC
+            ORDER BY r.requested_at DESC, r.id DESC, COALESCE(d0.stars, 0) ASC
             LIMIT :limit OFFSET :offset""",
             {"limit": limit, "offset": offset},
         )
