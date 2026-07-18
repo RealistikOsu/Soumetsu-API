@@ -47,6 +47,16 @@ LEVEL_100_SCORE = 26931190829
 LEVEL_100_INCREMENT = 100000000000
 
 
+def combined_mode(mode: int, custom_mode: int) -> int:
+    """Clean-schema mode 0-7: vanilla std/taiko/ctb/mania=0-3,
+    relax std/taiko/ctb=4-6, autopilot std=7."""
+    if custom_mode == CustomMode.AUTOPILOT:
+        return 7
+    if custom_mode == CustomMode.RELAX:
+        return 4 + mode
+    return mode
+
+
 def is_valid_mode(mode: int) -> bool:
     """Check if mode is a valid game mode (0-3)."""
     return 0 <= mode <= 3
