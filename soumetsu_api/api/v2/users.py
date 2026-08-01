@@ -161,9 +161,8 @@ class DiscordLinkResponse(BaseModel):
 
 
 class LinkDiscordRequest(BaseModel):
-    discord_id: str
-    discord_username: str = ""
-    discord_avatar: str = ""
+    code: str
+    redirect_uri: str
 
 
 @router.get("/search", response_model=response.BaseResponse[list[UserCompactResponse]])
@@ -348,17 +347,16 @@ async def link_discord(
     result = await users.link_discord(
         ctx,
         ctx.user_id,
-        body.discord_id,
-        body.discord_username,
-        body.discord_avatar,
+        body.code,
+        body.redirect_uri,
     )
-    response.unwrap(result)
+    result = response.unwrap(result)
 
     return response.create(
         DiscordLinkResponse(
-            discord_id=body.discord_id,
-            discord_username=body.discord_username,
-            discord_avatar=body.discord_avatar,
+            discord_id=result.discord_id,
+            discord_username=result.discord_username,
+            discord_avatar=result.discord_avatar,
         ),
     )
 

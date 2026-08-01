@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from . import discord
 from . import hcaptcha
 from . import mysql
 from . import redis

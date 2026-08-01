@@ -35,6 +35,10 @@ SESSION_SLIDING_WINDOW = (
     os.environ.get("SOUMETSUAPI_SESSION_SLIDING_WINDOW", "true").lower() == "true"
 )
 
+# Discord OAuth (account linking)
+DISCORD_APP_CLIENT_ID = os.environ.get("DISCORD_APP_CLIENT_ID", "")
+DISCORD_APP_CLIENT_SECRET = os.environ.get("DISCORD_APP_CLIENT_SECRET", "")
+
 # hCaptcha (bot protection)
 HCAPTCHA_SECRET_KEY = os.environ.get("SOUMETSUAPI_HCAPTCHA_SECRET_KEY", "")
 HCAPTCHA_ENABLED = (

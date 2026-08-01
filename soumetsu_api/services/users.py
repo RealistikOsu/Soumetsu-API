@@ -7,6 +7,7 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api import settings
+from soumetsu_api.adapters import discord as discord_oauth_client
 from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.users import ClanInfo
@@ -27,6 +28,7 @@ class UserError(ServiceError):
     INVALID_MODE = "invalid_mode"
     NO_DISCORD_LINKED = "no_discord_linked"
     DISCORD_ALREADY_LINKED = "discord_already_linked"
+    DISCORD_OAUTH_FAILED = "discord_oauth_failed"
     INVALID_PASSWORD = "invalid_password"
     WEAK_PASSWORD = "weak_password"
     UPLOAD_FAILED = "upload_failed"
@@ -59,6 +61,7 @@ class UserError(ServiceError):
                 | UserError.WEAK_PASSWORD
                 | UserError.INVALID_FILE_FORMAT
                 | UserError.UPLOAD_FAILED
+                | UserError.DISCORD_OAUTH_FAILED
             ):
                 return status.HTTP_400_BAD_REQUEST
             case _:
@@ -425,11 +428,16 @@ async def get_discord_link(
 async def link_discord(
     ctx: AbstractContext,
     user_id: int,
-    discord_id: str,
-    discord_username: str,
-    discord_avatar: str,
-) -> UserError.OnSuccess[None]:
-    existing_owner = await ctx.discord_oauth.get_user_for_discord(discord_id)
+    code: str,
+    redirect_uri: str,
+) -> UserError.OnSuccess[DiscordLink]:
+    try:
+        access_token = await discord_oauth_client.exchange_code(code, redirect_uri)
+        discord_user = await discord_oauth_client.fetch_user(access_token)
+    except discord_oauth_client.DiscordOAuthError:
+        return UserError.DISCORD_OAUTH_FAILED
+
+    existing_owner = await ctx.discord_oauth.get_user_for_discord(discord_user.id)
     if existing_owner is not None and existing_owner != user_id:
         return UserError.DISCORD_ALREADY_LINKED
 
@@ -437,8 +445,17 @@ async def link_discord(
     # account) and any stale row for this discord_id (handles the same user
     # re-linking the same account, which would otherwise hit the unique key).
     await ctx.discord_oauth.delete_by_user(user_id)
-    await ctx.discord_oauth.insert(user_id, discord_id, discord_username, discord_avatar)
-    return None
+    await ctx.discord_oauth.insert(
+        user_id,
+        discord_user.id,
+        discord_user.username,
+        discord_user.avatar,
+    )
+    return DiscordLink(
+        discord_id=discord_user.id,
+        discord_username=discord_user.username,
+        discord_avatar=discord_user.avatar,
+    )
 
 
 async def unlink_discord(
