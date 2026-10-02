@@ -58,12 +58,16 @@ def create_router() -> APIRouter:
     async def get_avatar(user_id: int):
         directory = Path(settings.AVATAR_PATH)
 
-        # Their own avatar first (gifs are kept for supporters), otherwise whatever default.* the
-        # directory holds, so nobody gets a broken image.
-        for suffix in ("png", "gif"):
+        # Their own avatar first, otherwise the default one, so nobody gets a broken image.
+        # The order matches the avatar nginx vhost: a gif wins over a png.
+        for suffix in ("gif", "png"):
             own = directory / f"{user_id}.{suffix}"
             if own.is_file():
                 return _image(own, 7200)
+
+        for name in ("default.gif", "default.png", "default"):
+            if (directory / name).is_file():
+                return _image(directory / name, 600)
 
         fallback = next((f for f in sorted(directory.glob("default.*")) if f.is_file()), None)
         if fallback is None:
