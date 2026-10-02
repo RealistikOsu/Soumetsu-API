@@ -144,14 +144,21 @@ class UserRepository:
         )
         return result or 0
 
-    async def search(self, query: str, limit: int, offset: int) -> list[User]:
+    async def search(
+        self,
+        query: str,
+        limit: int,
+        offset: int,
+        include_restricted: bool = False,
+    ) -> list[User]:
         username_pattern = f"%{query}%"
+        visibility = "" if include_restricted else "AND privileges & 1 = 1"
         rows = await self._mysql.fetch_all(
-            """SELECT id, username, username_safe, privileges, country,
+            f"""SELECT id, username, username_safe, privileges, country,
                       register_datetime as registered_at, latest_activity, coins
                FROM users
                WHERE username LIKE :pattern
-               AND privileges & 1 = 1
+               {visibility}
                ORDER BY latest_activity DESC
                LIMIT :limit OFFSET :offset""",
             {"pattern": username_pattern, "limit": limit, "offset": offset},

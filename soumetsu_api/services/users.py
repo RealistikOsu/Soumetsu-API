@@ -278,6 +278,7 @@ async def search_users(
     query: str,
     page: int = 1,
     limit: int = 50,
+    include_restricted: bool = False,
 ) -> UserError.OnSuccess[list[UserCompact]]:
     if limit > 100:
         limit = 100
@@ -285,7 +286,7 @@ async def search_users(
         page = 1
 
     offset = (page - 1) * limit
-    users = await ctx.users.search(query, limit, offset)
+    users = await ctx.users.search(query, limit, offset, include_restricted)
 
     return [
         UserCompact(
@@ -295,7 +296,8 @@ async def search_users(
             privileges=u.privileges,
         )
         for u in users
-        if not privileges.is_restricted(privileges.UserPrivileges(u.privileges))
+        if include_restricted
+        or not privileges.is_restricted(privileges.UserPrivileges(u.privileges))
     ]
 
 

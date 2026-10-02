@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import RequiresAuth
+from soumetsu_api.api.v2.context import OptionalAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.constants import CustomMode
@@ -18,6 +19,7 @@ from soumetsu_api.services import comments
 from soumetsu_api.services import friends
 from soumetsu_api.services import user_history
 from soumetsu_api.services import users
+from soumetsu_api.utilities import privileges
 
 router = APIRouter(prefix="/users")
 
@@ -167,12 +169,17 @@ class LinkDiscordRequest(BaseModel):
 
 @router.get("/search", response_model=response.BaseResponse[list[UserCompactResponse]])
 async def search_users(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     q: str = Query(..., min_length=1),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await users.search_users(ctx, q, page, limit)
+    # Staff who manage users can find restricted players too, everyone else only sees public ones.
+    staff = ctx.session is not None and privileges.has_privilege(
+        ctx.session.privileges,
+        privileges.UserPrivileges.ADMIN_MANAGE_USERS,
+    )
+    result = await users.search_users(ctx, q, page, limit, include_restricted=staff)
     result = response.unwrap(result)
 
     return response.create(
