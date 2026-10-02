@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+
+from soumetsu_api import settings
 
 from . import admin
 from . import auth
@@ -37,5 +43,27 @@ def create_router() -> APIRouter:
     router.include_router(stats.router)
     router.include_router(team.router)
     router.include_router(users.router)
+
+    @router.get("/assets/avatars/{user_id}.png")
+    async def get_avatar(user_id: int):
+        path = Path(settings.AVATAR_PATH) / f"{user_id}.png"
+        if not path.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(
+            path,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=7200"},
+        )
+
+    @router.get("/assets/banners/{user_id}.png")
+    async def get_banner(user_id: int):
+        path = Path(settings.BANNER_PATH) / f"{user_id}.png"
+        if not path.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(
+            path,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=7200"},
+        )
 
     return router
