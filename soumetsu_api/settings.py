@@ -38,6 +38,10 @@ SESSION_SLIDING_WINDOW = (
 # Discord OAuth (account linking)
 DISCORD_APP_CLIENT_ID = os.environ.get("DISCORD_APP_CLIENT_ID", "")
 DISCORD_APP_CLIENT_SECRET = os.environ.get("DISCORD_APP_CLIENT_SECRET", "")
+DISCORD_USER_LOOKUP_URL = os.environ.get(
+    "DISCORD_USER_LOOKUP_URL",
+    "https://discordlookup.mesalytic.moe/v1/user",
+).rstrip("/")
 
 # hCaptcha (bot protection)
 HCAPTCHA_SECRET_KEY = os.environ.get("SOUMETSUAPI_HCAPTCHA_SECRET_KEY", "")

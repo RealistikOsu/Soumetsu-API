@@ -10,6 +10,7 @@ from soumetsu_api import settings
 from soumetsu_api.adapters import discord as discord_oauth_client
 from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
+from soumetsu_api.resources.discord_oauth import DiscordOAuthData
 from soumetsu_api.resources.users import ClanInfo
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -209,11 +210,7 @@ async def get_profile(
     discord_row = await ctx.discord_oauth.get_by_user(user_id)
     discord = None
     if discord_row and discord_row.discord_id:
-        discord = DiscordLink(
-            discord_id=discord_row.discord_id,
-            discord_username=discord_row.discord_username,
-            discord_avatar=discord_row.discord_avatar,
-        )
+        discord = await _current_discord(discord_row)
 
     return UserProfile(
         id=user.id,
@@ -418,11 +415,24 @@ async def change_username(
     return None
 
 
+async def _current_discord(link: DiscordOAuthData) -> DiscordLink:
+    """The stored name and avatar date from when the account was linked, so prefer a live lookup."""
+    live = await discord_oauth_client.lookup_user(link.discord_id)
+    if live is None:
+        return link
+    return DiscordLink(
+        discord_id=link.discord_id,
+        discord_username=live.username,
+        discord_avatar=live.avatar or link.discord_avatar,
+    )
+
+
 async def get_discord_link(
     ctx: AbstractContext,
     user_id: int,
 ):
-    return await ctx.discord_oauth.get_by_user(user_id)
+    link = await ctx.discord_oauth.get_by_user(user_id)
+    return await _current_discord(link) if link else None
 
 
 async def link_discord(
