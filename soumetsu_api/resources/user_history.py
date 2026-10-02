@@ -26,7 +26,7 @@ class UserHistoryRepository:
     ) -> list[UserHistoryData]:
         rows = await self._mysql.fetch_all(
             """SELECT `rank`, pp, country_rank,
-                      DATE_FORMAT(captured_at, '%%Y-%%m-%%d') as captured_at
+                      DATE_FORMAT(captured_at, '%Y-%m-%d') as captured_at
                FROM user_profile_history
                WHERE user_id = :user_id
                AND mode = :mode
