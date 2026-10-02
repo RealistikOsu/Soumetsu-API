@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter
 from fastapi import Query
 from fastapi import Response
@@ -19,6 +21,7 @@ class LeaderboardModeStatsResponse(BaseModel):
     accuracy: float
     playcount: int
     level: float
+    ranked_score: int
 
 
 class LeaderboardEntryResponse(BaseModel):
@@ -29,6 +32,7 @@ class LeaderboardEntryResponse(BaseModel):
     chosen_mode: LeaderboardModeStatsResponse
     global_rank: int
     country_rank: int
+    coins: int
 
 
 class FirstPlaceResponse(BaseModel):
@@ -63,9 +67,11 @@ def _to_response(
             accuracy=e.chosen_mode.accuracy,
             playcount=e.chosen_mode.playcount,
             level=e.chosen_mode.level,
+            ranked_score=e.chosen_mode.ranked_score,
         ),
         global_rank=e.global_rank,
         country_rank=e.country_rank,
+        coins=e.coins,
     )
 
 
@@ -89,8 +95,9 @@ async def get_global(
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
+    sort: Literal["pp", "score", "coins"] = Query("pp"),
 ) -> Response:
-    result = await leaderboard.get_global(ctx, mode, custom_mode, page, limit)
+    result = await leaderboard.get_global(ctx, mode, custom_mode, page, limit, sort)
     result = response.unwrap(result)
 
     return response.create([_to_response(e) for e in result])
@@ -107,8 +114,17 @@ async def get_country(
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
+    sort: Literal["pp", "score", "coins"] = Query("pp"),
 ) -> Response:
-    result = await leaderboard.get_country(ctx, country, mode, custom_mode, page, limit)
+    result = await leaderboard.get_country(
+        ctx,
+        country,
+        mode,
+        custom_mode,
+        page,
+        limit,
+        sort,
+    )
     result = response.unwrap(result)
 
     return response.create([_to_response(e) for e in result])

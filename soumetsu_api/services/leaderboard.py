@@ -36,6 +36,7 @@ class LeaderboardModeStatsResult:
     accuracy: float
     playcount: int
     level: float
+    ranked_score: int
 
 
 @dataclass
@@ -47,6 +48,7 @@ class LeaderboardEntryResult:
     chosen_mode: LeaderboardModeStatsResult
     global_rank: int
     country_rank: int
+    coins: int
 
 
 @dataclass
@@ -72,9 +74,11 @@ def _entry_to_result(e: LeaderboardEntry) -> LeaderboardEntryResult:
             accuracy=e.chosen_mode.accuracy,
             playcount=e.chosen_mode.playcount,
             level=e.chosen_mode.level,
+            ranked_score=e.chosen_mode.ranked_score,
         ),
         global_rank=e.global_rank,
         country_rank=e.country_rank,
+        coins=e.coins,
     )
 
 
@@ -97,6 +101,7 @@ async def get_global(
     custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
+    sort: str = "pp",
 ) -> LeaderboardError.OnSuccess[list[LeaderboardEntryResult]]:
     if not is_valid_mode(mode):
         return LeaderboardError.INVALID_MODE
@@ -108,7 +113,16 @@ async def get_global(
         limit = 100
     offset = (page - 1) * limit
 
-    entries = await ctx.leaderboard.get_global(mode, custom_mode, limit, offset)
+    if sort == "pp":
+        entries = await ctx.leaderboard.get_global(mode, custom_mode, limit, offset)
+    else:
+        entries = await ctx.leaderboard.list_sorted(
+            mode,
+            custom_mode,
+            sort,
+            limit=limit,
+            offset=offset,
+        )
     return [_entry_to_result(e) for e in entries]
 
 
@@ -119,6 +133,7 @@ async def get_country(
     custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
+    sort: str = "pp",
 ) -> LeaderboardError.OnSuccess[list[LeaderboardEntryResult]]:
     if not is_valid_mode(mode):
         return LeaderboardError.INVALID_MODE
@@ -130,13 +145,23 @@ async def get_country(
         limit = 100
     offset = (page - 1) * limit
 
-    entries = await ctx.leaderboard.get_country(
-        country,
-        mode,
-        custom_mode,
-        limit,
-        offset,
-    )
+    if sort == "pp":
+        entries = await ctx.leaderboard.get_country(
+            country,
+            mode,
+            custom_mode,
+            limit,
+            offset,
+        )
+    else:
+        entries = await ctx.leaderboard.list_sorted(
+            mode,
+            custom_mode,
+            sort,
+            country=country,
+            limit=limit,
+            offset=offset,
+        )
     return [_entry_to_result(e) for e in entries]
 
 

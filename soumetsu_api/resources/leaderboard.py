@@ -13,6 +13,7 @@ class LeaderboardModeStats(BaseModel):
     accuracy: float
     playcount: int
     level: float
+    ranked_score: int = 0
 
 
 class LeaderboardEntry(BaseModel):
@@ -23,6 +24,7 @@ class LeaderboardEntry(BaseModel):
     chosen_mode: LeaderboardModeStats
     global_rank: int
     country_rank: int
+    coins: int = 0
 
 
 class FirstPlaceEntry(BaseModel):
@@ -198,7 +200,9 @@ class LeaderboardRepository:
                    s.pp_{suffix} as pp,
                    s.avg_accuracy_{suffix} as accuracy,
                    s.playcount_{suffix} as playcount,
-                   s.total_score_{suffix} as total_score
+                   s.total_score_{suffix} as total_score,
+                   s.ranked_score_{suffix} as ranked_score,
+                   u.coins
             FROM {table} s
             INNER JOIN users u ON s.id = u.id
             WHERE s.id IN ({placeholders})
@@ -232,13 +236,70 @@ class LeaderboardRepository:
                         accuracy=row["accuracy"] or 0.0,
                         playcount=row["playcount"] or 0,
                         level=_calculate_level(row["total_score"] or 0),
+                        ranked_score=row["ranked_score"] or 0,
                     ),
                     global_rank=base_offset + i + 1,
                     country_rank=country_rank,
+                    coins=row["coins"] or 0,
                 ),
             )
 
         return entries
+
+    async def list_sorted(
+        self,
+        mode: int,
+        custom_mode: int,
+        sort: str,
+        country: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[LeaderboardEntry]:
+        table = get_stats_table(custom_mode)
+        suffix = get_mode_suffix(mode)
+        order_column = "u.coins" if sort == "coins" else f"s.ranked_score_{suffix}"
+
+        country_filter = "AND u.country = :country" if country else ""
+        params: dict[str, str | int] = {"limit": limit, "offset": offset}
+        if country:
+            params["country"] = country.upper()
+
+        query = f"""
+            SELECT s.id, u.username, u.country, u.privileges,
+                   s.pp_{suffix} as pp,
+                   s.avg_accuracy_{suffix} as accuracy,
+                   s.playcount_{suffix} as playcount,
+                   s.total_score_{suffix} as total_score,
+                   s.ranked_score_{suffix} as ranked_score,
+                   u.coins
+            FROM {table} s
+            INNER JOIN users u ON s.id = u.id
+            WHERE u.privileges & 1 = 1
+            {country_filter}
+            ORDER BY {order_column} DESC, s.id ASC
+            LIMIT :limit OFFSET :offset
+        """
+        rows = await self._mysql.fetch_all(query, params)
+
+        return [
+            LeaderboardEntry(
+                id=row["id"],
+                username=row["username"],
+                country=row["country"],
+                privileges=row["privileges"],
+                chosen_mode=LeaderboardModeStats(
+                    pp=row["pp"] or 0,
+                    accuracy=row["accuracy"] or 0.0,
+                    playcount=row["playcount"] or 0,
+                    level=_calculate_level(row["total_score"] or 0),
+                    ranked_score=row["ranked_score"] or 0,
+                ),
+                global_rank=offset + i + 1,
+                country_rank=0,
+                coins=row["coins"] or 0,
+            )
+            for i, row in enumerate(rows)
+        ]
 
     async def list_oldest_firsts(
         self,
