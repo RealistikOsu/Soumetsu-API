@@ -416,14 +416,12 @@ async def change_username(
 
 
 async def _current_discord(link: DiscordOAuthData) -> DiscordLink:
-    """The stored name and avatar date from when the account was linked, so prefer a live lookup."""
+    """Only the Discord id is stored, as names change, so the rest comes from a live lookup."""
     live = await discord_oauth_client.lookup_user(link.discord_id)
-    if live is None:
-        return link
     return DiscordLink(
         discord_id=link.discord_id,
-        discord_username=live.username,
-        discord_avatar=live.avatar or link.discord_avatar,
+        discord_username=live.username if live else "",
+        discord_avatar=live.avatar if live else "",
     )
 
 
@@ -455,12 +453,7 @@ async def link_discord(
     # account) and any stale row for this discord_id (handles the same user
     # re-linking the same account, which would otherwise hit the unique key).
     await ctx.discord_oauth.delete_by_user(user_id)
-    await ctx.discord_oauth.insert(
-        user_id,
-        discord_user.id,
-        discord_user.username,
-        discord_user.avatar,
-    )
+    await ctx.discord_oauth.insert(user_id, discord_user.id)
     return DiscordLink(
         discord_id=discord_user.id,
         discord_username=discord_user.username,

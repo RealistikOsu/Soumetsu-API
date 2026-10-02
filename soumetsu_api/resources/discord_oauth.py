@@ -7,8 +7,6 @@ from soumetsu_api.adapters.mysql import ImplementsMySQL
 
 class DiscordOAuthData(BaseModel):
     discord_id: str
-    discord_username: str
-    discord_avatar: str
 
 
 class DiscordOAuthRepository:
@@ -19,17 +17,12 @@ class DiscordOAuthRepository:
 
     async def get_by_user(self, user_id: int) -> DiscordOAuthData | None:
         row = await self._mysql.fetch_one(
-            """SELECT discord_id, discord_username, discord_avatar
-               FROM discord_oauth WHERE user_id = :user_id LIMIT 1""",
+            "SELECT discord_id FROM discord_oauth WHERE user_id = :user_id LIMIT 1",
             {"user_id": user_id},
         )
         if not row:
             return None
-        return DiscordOAuthData(
-            discord_id=row["discord_id"],
-            discord_username=row["discord_username"],
-            discord_avatar=row["discord_avatar"],
-        )
+        return DiscordOAuthData(discord_id=row["discord_id"])
 
     async def get_user_for_discord(self, discord_id: str) -> int | None:
         return await self._mysql.fetch_val(
@@ -43,20 +36,8 @@ class DiscordOAuthRepository:
             {"user_id": user_id},
         )
 
-    async def insert(
-        self,
-        user_id: int,
-        discord_id: str,
-        discord_username: str,
-        discord_avatar: str,
-    ) -> None:
+    async def insert(self, user_id: int, discord_id: str) -> None:
         await self._mysql.execute(
-            """INSERT INTO discord_oauth (user_id, discord_id, discord_username, discord_avatar)
-               VALUES (:user_id, :discord_id, :discord_username, :discord_avatar)""",
-            {
-                "user_id": user_id,
-                "discord_id": discord_id,
-                "discord_username": discord_username,
-                "discord_avatar": discord_avatar,
-            },
+            "INSERT INTO discord_oauth (user_id, discord_id) VALUES (:user_id, :discord_id)",
+            {"user_id": user_id, "discord_id": discord_id},
         )
