@@ -288,7 +288,7 @@ class BeatmapsRepository:
         requested_at = int(time_module.time())
         today_start = requested_at - (requested_at % 86400)
 
-        result = await self._mysql.execute(
+        await self._mysql.execute(
             """INSERT INTO rank_requests (userid, bid, type, time, blacklisted)
                SELECT :requester_id, :beatmap_id, :request_type, :requested_at, 0
                FROM dual
@@ -306,11 +306,16 @@ class BeatmapsRepository:
             },
         )
 
-        if result == 0:
-            return None
-
-        request_id = await self._mysql.fetch_val("SELECT LAST_INSERT_ID()")
-        return request_id or None
+        # The driver reports 0 for an INSERT ... SELECT even when a row was written, so look it up.
+        return await self._mysql.fetch_val(
+            """SELECT id FROM rank_requests
+               WHERE userid = :requester_id AND bid = :beatmap_id AND time = :requested_at""",
+            {
+                "requester_id": requester_id,
+                "beatmap_id": beatmap_id,
+                "requested_at": requested_at,
+            },
+        )
 
     async def find_user_oldest_rank_request_today(
         self,
