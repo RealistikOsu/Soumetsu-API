@@ -143,3 +143,22 @@ async def wipe_user_stats(
     response.unwrap(result)
 
     return response.create(None)
+
+
+@router.delete(
+    "/users/{user_id}/avatar",
+    response_model=response.BaseResponse[None],
+)
+async def reset_user_avatar(
+    ctx: RequiresAuthTransaction,
+    user_id: int,
+) -> Response:
+    result = await admin.reset_avatar(
+        ctx,
+        ctx.user_id,
+        ctx.privileges,
+        user_id,
+    )
+    response.unwrap(result)
+
+    return response.create(None)

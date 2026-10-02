@@ -202,3 +202,28 @@ async def wipe_user_stats(
     )
 
     return None
+
+
+async def reset_avatar(
+    ctx: AbstractContext,
+    admin_id: int,
+    admin_privileges: int,
+    user_id: int,
+) -> AdminError.OnSuccess[bool]:
+    """Deletes a user's avatar so they get the default again. Returns whether there was one."""
+    if not check_admin(admin_privileges, privileges.UserPrivileges.ADMIN_MANAGE_USERS):
+        return AdminError.FORBIDDEN
+
+    user = await ctx.users.find_by_id(user_id)
+    if not user:
+        return AdminError.USER_NOT_FOUND
+
+    deleted = await ctx.user_files.delete_avatar(user_id)
+    if deleted:
+        await ctx.admin.create_rap_log(
+            admin_id,
+            f"reset avatar for user {user_id}",
+            "soumetsu-api",
+        )
+
+    return deleted
