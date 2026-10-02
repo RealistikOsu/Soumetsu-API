@@ -197,6 +197,7 @@ async def get_player_recent(
     custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
+    exclude_failed: bool = False,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
     user = await ctx.users.find_by_id(player_id)
     if not user:
@@ -216,6 +217,7 @@ async def get_player_recent(
         custom_mode,
         limit,
         offset,
+        exclude_failed,
     )
     return [_score_with_beatmap_to_result(s) for s in scores]
 

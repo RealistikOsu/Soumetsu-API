@@ -270,6 +270,7 @@ async def get_player_recent(
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
+    exclude_failed: bool = Query(False),
 ) -> Response:
     result = await scores.get_player_recent(
         ctx,
@@ -278,6 +279,7 @@ async def get_player_recent(
         custom_mode,
         page,
         limit,
+        exclude_failed,
     )
     result = response.unwrap(result)
 

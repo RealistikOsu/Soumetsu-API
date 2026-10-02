@@ -136,8 +136,10 @@ class ScoresRepository:
         custom_mode: int,
         limit: int = 50,
         offset: int = 0,
+        exclude_failed: bool = False,
     ) -> list[ScoreWithBeatmap]:
         table = self._get_table(custom_mode)
+        passed_only = "AND s.completed >= 1" if exclude_failed else ""
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",
@@ -158,6 +160,7 @@ class ScoresRepository:
             INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
             WHERE s.userid = :player_id
             AND s.play_mode = :mode
+            {passed_only}
             ORDER BY s.time DESC
             LIMIT :limit OFFSET :offset
         """
