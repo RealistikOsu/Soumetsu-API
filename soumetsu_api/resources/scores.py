@@ -67,6 +67,10 @@ class ScoresRepository:
     def _get_table(self, custom_mode: int) -> str:
         return SCORE_TABLES[custom_mode]
 
+    # Queries for one player's scores write "play_mode + 0" (and the same for completed) on purpose: it keeps
+    # MySQL from intersecting those low-cardinality indexes with userid, which scanned far more rows than
+    # walking the player's own scores and made profile lists take most of a second.
+
     async def find_by_id(
         self,
         score_id: int,
@@ -117,8 +121,8 @@ class ScoresRepository:
             FROM {table} s
             INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
             WHERE s.userid = :player_id
-            AND s.play_mode = :mode
-            AND s.completed = 3
+            AND s.play_mode + 0 = :mode
+            AND s.completed + 0 = 3
             AND b.ranked = 2
             ORDER BY s.pp DESC
             LIMIT :limit OFFSET :offset
@@ -139,7 +143,7 @@ class ScoresRepository:
         exclude_failed: bool = False,
     ) -> list[ScoreWithBeatmap]:
         table = self._get_table(custom_mode)
-        passed_only = "AND s.completed >= 1" if exclude_failed else ""
+        passed_only = "AND s.completed + 0 >= 1" if exclude_failed else ""
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",
@@ -159,7 +163,7 @@ class ScoresRepository:
             FROM {table} s
             INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
             WHERE s.userid = :player_id
-            AND s.play_mode = :mode
+            AND s.play_mode + 0 = :mode
             {passed_only}
             ORDER BY s.time DESC
             LIMIT :limit OFFSET :offset

@@ -208,16 +208,21 @@ class BeatmapsRepository:
         scores_tables = ["scores", "scores_relax", "scores_ap"]
         scores_table = scores_tables[custom_mode]
 
+        # Counting first and joining only the page's beatmaps keeps this fast. The "+ 0" stops MySQL from
+        # intersecting the userid and play_mode indexes, which made it scan far more rows (over a second
+        # for an active player) than walking that player's scores by userid alone.
         rows = await self._mysql.fetch_all(
-            f"""SELECT b.beatmap_id, b.beatmapset_id, b.song_name,
-                       COUNT(*) as playcount
-                FROM {scores_table} s
-                INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
-                WHERE s.userid = :user_id
-                AND s.play_mode = :mode
-                GROUP BY s.beatmap_md5
-                ORDER BY playcount DESC
-                LIMIT :limit OFFSET :offset""",
+            f"""SELECT b.beatmap_id, b.beatmapset_id, b.song_name, t.playcount
+                FROM (
+                    SELECT beatmap_md5, COUNT(*) AS playcount
+                    FROM {scores_table}
+                    WHERE userid = :user_id AND play_mode + 0 = :mode
+                    GROUP BY beatmap_md5
+                    ORDER BY playcount DESC
+                    LIMIT :limit OFFSET :offset
+                ) t
+                INNER JOIN beatmaps b ON b.beatmap_md5 = t.beatmap_md5
+                ORDER BY t.playcount DESC""",
             {"user_id": user_id, "mode": mode, "limit": limit, "offset": offset},
         )
         return [MostPlayedBeatmapData(**row) for row in rows]
