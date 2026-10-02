@@ -8,6 +8,7 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api.resources.beatmaps import BeatmapData
+from soumetsu_api import settings
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 
@@ -198,8 +199,6 @@ async def get_user_most_played(
     ]
 
 
-DAILY_RANK_REQUEST_LIMIT = 5
-DAILY_GLOBAL_REQUEST_LIMIT = 50
 
 
 @dataclass
@@ -269,30 +268,33 @@ async def get_rank_request_status(
     ctx: AbstractContext,
     user_id: int | None = None,
 ) -> BeatmapError.OnSuccess[RankRequestStatusResult]:
-    submitted_today = await ctx.beatmaps.count_rank_requests_today()
+    submitted_recent = await ctx.beatmaps.count_recent_rank_requests()
 
     if user_id is None:
         return RankRequestStatusResult(
-            submitted=submitted_today,
-            queue_size=DAILY_GLOBAL_REQUEST_LIMIT,
+            submitted=submitted_recent,
+            queue_size=settings.RANK_QUEUE_SIZE,
             can_submit=False,
         )
 
-    submitted_by_user = await ctx.beatmaps.count_user_rank_requests_today(user_id)
-    can_submit = submitted_by_user < DAILY_RANK_REQUEST_LIMIT
+    submitted_by_user = await ctx.beatmaps.count_user_recent_rank_requests(user_id)
+    can_submit = (
+        submitted_by_user < settings.RANK_REQUESTS_PER_USER
+        and submitted_recent < settings.RANK_QUEUE_SIZE
+    )
 
     next_expiration = None
     if not can_submit:
-        oldest_time = await ctx.beatmaps.find_user_oldest_rank_request_today(user_id)
+        oldest_time = await ctx.beatmaps.find_user_oldest_recent_rank_request(user_id)
         if oldest_time:
             next_expiration = _format_relative_time(oldest_time)
 
     return RankRequestStatusResult(
-        submitted=submitted_today,
-        queue_size=DAILY_GLOBAL_REQUEST_LIMIT,
+        submitted=submitted_recent,
+        queue_size=settings.RANK_QUEUE_SIZE,
         can_submit=can_submit,
         submitted_by_user=submitted_by_user,
-        max_per_user=DAILY_RANK_REQUEST_LIMIT,
+        max_per_user=settings.RANK_REQUESTS_PER_USER,
         next_expiration=next_expiration,
     )
 
@@ -378,7 +380,8 @@ async def submit_rank_request(
         user_id,
         beatmap_id,
         request_type,
-        DAILY_RANK_REQUEST_LIMIT,
+        settings.RANK_REQUESTS_PER_USER,
+        settings.RANK_QUEUE_SIZE,
     )
     if request_id is None:
         return BeatmapError.DAILY_LIMIT_REACHED

@@ -43,6 +43,10 @@ DISCORD_USER_LOOKUP_URL = os.environ.get(
     "https://discordlookup.mesalytic.moe/v1/user",
 ).rstrip("/")
 
+# Rank requests: how many can be open across the server, and per player, over the last 24 hours.
+RANK_QUEUE_SIZE = int(os.environ.get("SOUMETSUAPI_RANK_QUEUE_SIZE", 500))
+RANK_REQUESTS_PER_USER = int(os.environ.get("SOUMETSUAPI_RANK_REQUESTS_PER_USER", 25))
+
 # hCaptcha (bot protection)
 HCAPTCHA_SECRET_KEY = os.environ.get("SOUMETSUAPI_HCAPTCHA_SECRET_KEY", "")
 HCAPTCHA_ENABLED = (

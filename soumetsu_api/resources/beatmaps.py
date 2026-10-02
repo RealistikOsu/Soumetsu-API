@@ -7,6 +7,10 @@ from pydantic import BaseModel
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 
 
+# Requests count against the limits for a rolling 24 hours, like the old API.
+_DAY = 86400
+
+
 class BeatmapData(BaseModel):
     beatmap_id: int
     beatmapset_id: int
@@ -218,23 +222,23 @@ class BeatmapsRepository:
         )
         return [MostPlayedBeatmapData(**row) for row in rows]
 
-    async def count_rank_requests_today(self) -> int:
-        today_start = int(time_module.time()) - (int(time_module.time()) % 86400)
+    async def count_recent_rank_requests(self) -> int:
+        since = int(time_module.time()) - _DAY
 
         result = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM rank_requests
-               WHERE blacklisted = 0 AND time >= :today_start""",
-            {"today_start": today_start},
+               WHERE blacklisted = 0 AND time >= :since""",
+            {"since": since},
         )
         return result or 0
 
-    async def count_user_rank_requests_today(self, requester_id: int) -> int:
-        today_start = int(time_module.time()) - (int(time_module.time()) % 86400)
+    async def count_user_recent_rank_requests(self, requester_id: int) -> int:
+        since = int(time_module.time()) - _DAY
 
         result = await self._mysql.fetch_val(
             """SELECT COUNT(*) FROM rank_requests
-               WHERE userid = :requester_id AND time >= :today_start""",
-            {"requester_id": requester_id, "today_start": today_start},
+               WHERE userid = :requester_id AND time >= :since""",
+            {"requester_id": requester_id, "since": since},
         )
         return result or 0
 
@@ -280,13 +284,14 @@ class BeatmapsRepository:
         beatmap_id: int,
         request_type: str,
         daily_limit: int,
+        queue_size: int,
     ) -> int | None:
-        """Atomically create a rank request only if the user is below the daily limit.
+        """Atomically create a rank request only if both the player and the queue are under their limits.
 
         Returns the request ID if created, None if the daily limit was reached.
         """
         requested_at = int(time_module.time())
-        today_start = requested_at - (requested_at % 86400)
+        since = requested_at - _DAY
 
         await self._mysql.execute(
             """INSERT INTO rank_requests (userid, bid, type, time, blacklisted)
@@ -294,15 +299,20 @@ class BeatmapsRepository:
                FROM dual
                WHERE (
                    SELECT COUNT(*) FROM rank_requests
-                   WHERE userid = :requester_id AND time >= :today_start
-               ) < :daily_limit""",
+                   WHERE userid = :requester_id AND time >= :since
+               ) < :daily_limit
+               AND (
+                   SELECT COUNT(*) FROM rank_requests
+                   WHERE blacklisted = 0 AND time >= :since
+               ) < :queue_size""",
             {
                 "requester_id": requester_id,
                 "beatmap_id": beatmap_id,
                 "request_type": request_type,
                 "requested_at": requested_at,
-                "today_start": today_start,
+                "since": since,
                 "daily_limit": daily_limit,
+                "queue_size": queue_size,
             },
         )
 
@@ -317,16 +327,16 @@ class BeatmapsRepository:
             },
         )
 
-    async def find_user_oldest_rank_request_today(
+    async def find_user_oldest_recent_rank_request(
         self,
         requester_id: int,
     ) -> int | None:
-        today_start = int(time_module.time()) - (int(time_module.time()) % 86400)
+        since = int(time_module.time()) - _DAY
 
         result = await self._mysql.fetch_val(
             """SELECT MIN(time) FROM rank_requests
-               WHERE userid = :requester_id AND time >= :today_start""",
-            {"requester_id": requester_id, "today_start": today_start},
+               WHERE userid = :requester_id AND time >= :since""",
+            {"requester_id": requester_id, "since": since},
         )
         return result
 
