@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -24,6 +25,15 @@ from . import team
 from . import users
 
 
+def _image(path: Path, max_age: int) -> FileResponse:
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={"Cache-Control": f"public, max-age={max_age}"},
+    )
+
+
 def create_router() -> APIRouter:
     router = APIRouter(
         prefix="/v2",
@@ -46,24 +56,25 @@ def create_router() -> APIRouter:
 
     @router.get("/assets/avatars/{user_id}.png")
     async def get_avatar(user_id: int):
-        path = Path(settings.AVATAR_PATH) / f"{user_id}.png"
-        if not path.is_file():
+        directory = Path(settings.AVATAR_PATH)
+
+        # Their own avatar first (gifs are kept for supporters), otherwise whatever default.* the
+        # directory holds, so nobody gets a broken image.
+        for suffix in ("png", "gif"):
+            own = directory / f"{user_id}.{suffix}"
+            if own.is_file():
+                return _image(own, 7200)
+
+        fallback = next((f for f in sorted(directory.glob("default.*")) if f.is_file()), None)
+        if fallback is None:
             raise HTTPException(status_code=404)
-        return FileResponse(
-            path,
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=7200"},
-        )
+        return _image(fallback, 600)
 
     @router.get("/assets/banners/{user_id}.png")
     async def get_banner(user_id: int):
         path = Path(settings.BANNER_PATH) / f"{user_id}.png"
         if not path.is_file():
             raise HTTPException(status_code=404)
-        return FileResponse(
-            path,
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=7200"},
-        )
+        return _image(path, 7200)
 
     return router
