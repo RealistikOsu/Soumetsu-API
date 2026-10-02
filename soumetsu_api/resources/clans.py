@@ -8,7 +8,7 @@ from soumetsu_api.constants import get_stats_table
 from soumetsu_api.resources.scores import SCORE_TABLES
 
 CLAN_PERM_MEMBER = 1
-CLAN_PERM_OWNER = 2
+CLAN_PERM_OWNER = 8
 
 
 class ClanData(BaseModel):
