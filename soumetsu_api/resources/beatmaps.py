@@ -51,6 +51,7 @@ class ProfileDifficultyData(BaseModel):
     beatmap_id: int
     song_name: str
     mode: int
+    status: int
     stars: float
     mapper: str | None
 
@@ -300,7 +301,7 @@ class BeatmapsRepository:
         if ranked_by is not None:
             params["ranked_by"] = ranked_by
         rows = await self._mysql.fetch_all(
-            f"""SELECT b.beatmapset_id, b.beatmap_id, b.song_name, b.mode,
+            f"""SELECT b.beatmapset_id, b.beatmap_id, b.song_name, b.mode, b.ranked AS status,
                        CASE b.mode
                            WHEN 1 THEN b.difficulty_taiko
                            WHEN 2 THEN b.difficulty_ctb

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 import time as time_module
 from dataclasses import dataclass
 from typing import Literal
@@ -9,6 +10,7 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api.resources.beatmaps import BeatmapData
+from soumetsu_api.resources.beatmaps import ProfileDifficultyData
 from soumetsu_api import settings
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -196,6 +198,12 @@ def _split_song(song_name: str) -> tuple[str, str, str]:
     return (artist, title, version) if title else ("", song, version)
 
 
+# A set's difficulties can differ; it shows the status most of them have, and ranked wins a tie.
+def _common_status(diffs: list[ProfileDifficultyData]) -> int:
+    counts = Counter(d.status for d in diffs)
+    return max(counts, key=lambda status: (counts[status], status == 2))
+
+
 async def list_user_sets(
     ctx: AbstractContext,
     user_id: int,
@@ -231,7 +239,7 @@ async def list_user_sets(
                 artist=artist,
                 title=title,
                 creator=mine[0].mapper,
-                status=s.status,
+                status=_common_status(mine),
                 time=s.time,
                 difficulties=[
                     ProfileDifficulty(
