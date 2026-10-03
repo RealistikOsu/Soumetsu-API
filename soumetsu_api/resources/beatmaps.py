@@ -86,6 +86,8 @@ class RankRequestWithBeatmapData(BaseModel):
     mapper_id: int
 
 
+# ranked = -1 marks a map the submission service reserved an ID for but that was never uploaded; it has
+# no data and stays out of every lookup.
 class BeatmapsRepository:
     __slots__ = ("_mysql",)
 
@@ -100,7 +102,7 @@ class BeatmapsRepository:
                       hit_length, bpm, playcount, passcount, ranked,
                       latest_update as updated_at,
                       ranked_status_freezed as ranked_status_frozen, mapper_id
-               FROM beatmaps WHERE beatmap_id = :beatmap_id""",
+               FROM beatmaps WHERE beatmap_id = :beatmap_id AND ranked != -1""",
             {"beatmap_id": beatmap_id},
         )
         if not row:
@@ -116,7 +118,7 @@ class BeatmapsRepository:
                       hit_length, bpm, playcount, passcount, ranked,
                       latest_update as updated_at,
                       ranked_status_freezed as ranked_status_frozen, mapper_id
-               FROM beatmaps WHERE beatmap_md5 = :beatmap_md5""",
+               FROM beatmaps WHERE beatmap_md5 = :beatmap_md5 AND ranked != -1""",
             {"beatmap_md5": beatmap_md5},
         )
         if not row:
@@ -132,7 +134,7 @@ class BeatmapsRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[BeatmapData]:
-        conditions = []
+        conditions = ["ranked != -1"]
         params: dict[str, str | int] = {"limit": limit, "offset": offset}
 
         if query:
@@ -147,7 +149,7 @@ class BeatmapsRepository:
             conditions.append("ranked = :status")
             params["status"] = status
 
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        where_clause = " AND ".join(conditions)
 
         rows = await self._mysql.fetch_all(
             f"""SELECT beatmap_id, beatmapset_id, beatmap_md5, song_name,
@@ -205,7 +207,7 @@ class BeatmapsRepository:
                       hit_length, bpm, playcount, passcount, ranked,
                       latest_update as updated_at,
                       ranked_status_freezed as ranked_status_frozen, mapper_id
-               FROM beatmaps WHERE beatmapset_id = :beatmapset_id
+               FROM beatmaps WHERE beatmapset_id = :beatmapset_id AND ranked != -1
                ORDER BY difficulty_std ASC""",
             {"beatmapset_id": beatmapset_id},
         )
@@ -272,7 +274,7 @@ class BeatmapsRepository:
         rows = await self._mysql.fetch_all(
             """SELECT beatmapset_id, MAX(ranked) AS status, MAX(latest_update) AS time
                FROM beatmaps
-               WHERE beatmapset_id >= 1000000000 AND mapper_id = :user_id
+               WHERE beatmapset_id >= 1000000000 AND mapper_id = :user_id AND ranked != -1
                GROUP BY beatmapset_id
                ORDER BY time DESC, beatmapset_id DESC
                LIMIT :limit OFFSET :offset""",
