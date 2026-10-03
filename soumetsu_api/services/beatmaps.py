@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import time as time_module
 from dataclasses import dataclass
+from typing import Literal
 from typing import override
 
 from fastapi import status
@@ -166,6 +167,49 @@ class MostPlayedResult:
     playcount: int
 
 
+@dataclass
+class ProfileBeatmapSet:
+    beatmapset_id: int
+    beatmap_id: int
+    title: str
+    status: int
+    difficulties: int
+    time: int
+
+
+def _set_title(song_name: str) -> str:
+    # song_name is one difficulty's "Artist - Title [Difficulty]".
+    return song_name.rsplit(" [", 1)[0] if song_name.endswith("]") else song_name
+
+
+async def list_user_sets(
+    ctx: AbstractContext,
+    user_id: int,
+    kind: Literal["ranked", "mapped"],
+    page: int = 1,
+    limit: int = 5,
+) -> BeatmapError.OnSuccess[list[ProfileBeatmapSet]]:
+    limit = min(limit, 50)
+    offset = (page - 1) * limit
+    lister = (
+        ctx.beatmaps.list_user_ranked_sets
+        if kind == "ranked"
+        else ctx.beatmaps.list_user_mapped_sets
+    )
+    rows = await lister(user_id, limit, offset)
+    return [
+        ProfileBeatmapSet(
+            beatmapset_id=r.beatmapset_id,
+            beatmap_id=r.beatmap_id,
+            title=_set_title(r.song_name),
+            status=r.status,
+            difficulties=r.difficulties,
+            time=r.time,
+        )
+        for r in rows
+    ]
+
+
 async def get_user_most_played(
     ctx: AbstractContext,
     user_id: int,
@@ -197,8 +241,6 @@ async def get_user_most_played(
         )
         for b in beatmaps
     ]
-
-
 
 
 @dataclass

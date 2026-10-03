@@ -710,6 +710,59 @@ class MostPlayedResponse(BaseModel):
     playcount: int
 
 
+class ProfileBeatmapSetResponse(BaseModel):
+    beatmapset_id: int
+    beatmap_id: int
+    title: str
+    status: int
+    difficulties: int
+    time: int
+
+
+def _sets_response(result: list[beatmaps.ProfileBeatmapSet]) -> Response:
+    return response.create(
+        [
+            ProfileBeatmapSetResponse(
+                beatmapset_id=s.beatmapset_id,
+                beatmap_id=s.beatmap_id,
+                title=s.title,
+                status=s.status,
+                difficulties=s.difficulties,
+                time=s.time,
+            )
+            for s in result
+        ],
+    )
+
+
+@router.get(
+    "/{user_id}/beatmaps/ranked",
+    response_model=response.BaseResponse[list[ProfileBeatmapSetResponse]],
+)
+async def get_user_ranked_sets(
+    ctx: RequiresContext,
+    user_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=50),
+) -> Response:
+    result = await beatmaps.list_user_sets(ctx, user_id, "ranked", page, limit)
+    return _sets_response(response.unwrap(result))
+
+
+@router.get(
+    "/{user_id}/beatmaps/mapped",
+    response_model=response.BaseResponse[list[ProfileBeatmapSetResponse]],
+)
+async def get_user_mapped_sets(
+    ctx: RequiresContext,
+    user_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=50),
+) -> Response:
+    result = await beatmaps.list_user_sets(ctx, user_id, "mapped", page, limit)
+    return _sets_response(response.unwrap(result))
+
+
 @router.get(
     "/{user_id}/beatmaps/most-played",
     response_model=response.BaseResponse[list[MostPlayedResponse]],

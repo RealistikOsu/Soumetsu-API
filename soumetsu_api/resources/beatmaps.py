@@ -6,7 +6,6 @@ from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 
-
 # Requests count against the limits for a rolling 24 hours, like the old API.
 _DAY = 86400
 
@@ -39,6 +38,15 @@ class MostPlayedBeatmapData(BaseModel):
     beatmapset_id: int
     song_name: str
     playcount: int
+
+
+class ProfileBeatmapSetData(BaseModel):
+    beatmapset_id: int
+    beatmap_id: int
+    song_name: str
+    status: int
+    difficulties: int
+    time: int
 
 
 class RankRequestData(BaseModel):
@@ -226,6 +234,48 @@ class BeatmapsRepository:
             {"user_id": user_id, "mode": mode, "limit": limit, "offset": offset},
         )
         return [MostPlayedBeatmapData(**row) for row in rows]
+
+    async def list_user_ranked_sets(
+        self,
+        user_id: int,
+        limit: int,
+        offset: int,
+    ) -> list[ProfileBeatmapSetData]:
+        # A difficulty only counts while it still has the status this user gave it.
+        rows = await self._mysql.fetch_all(
+            """SELECT b.beatmapset_id, MIN(b.beatmap_id) AS beatmap_id,
+                      MIN(b.song_name) AS song_name, MIN(r.status) AS status,
+                      COUNT(*) AS difficulties, MAX(r.ranked_at) AS time
+               FROM beatmap_rankers r
+               INNER JOIN beatmaps b ON b.beatmap_id = r.beatmap_id AND b.ranked = r.status
+               WHERE r.user_id = :user_id
+               GROUP BY b.beatmapset_id
+               ORDER BY time DESC, b.beatmapset_id DESC
+               LIMIT :limit OFFSET :offset""",
+            {"user_id": user_id, "limit": limit, "offset": offset},
+        )
+        return [ProfileBeatmapSetData(**row) for row in rows]
+
+    async def list_user_mapped_sets(
+        self,
+        user_id: int,
+        limit: int,
+        offset: int,
+    ) -> list[ProfileBeatmapSetData]:
+        # Only maps uploaded to this server have a mapper_id, and those all get set IDs from 1000000000 up,
+        # which lets MySQL use the set index instead of scanning every beatmap.
+        rows = await self._mysql.fetch_all(
+            """SELECT beatmapset_id, MIN(beatmap_id) AS beatmap_id,
+                      MIN(song_name) AS song_name, MAX(ranked) AS status,
+                      COUNT(*) AS difficulties, MAX(latest_update) AS time
+               FROM beatmaps
+               WHERE beatmapset_id >= 1000000000 AND mapper_id = :user_id
+               GROUP BY beatmapset_id
+               ORDER BY time DESC, beatmapset_id DESC
+               LIMIT :limit OFFSET :offset""",
+            {"user_id": user_id, "limit": limit, "offset": offset},
+        )
+        return [ProfileBeatmapSetData(**row) for row in rows]
 
     async def count_recent_rank_requests(self) -> int:
         since = int(time_module.time()) - _DAY
