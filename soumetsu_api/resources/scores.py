@@ -399,6 +399,7 @@ class ScoresRepository:
             WHERE s.beatmap_md5 = :beatmap_md5
             AND s.play_mode = :mode
             AND s.completed = 3
+            AND u.privileges & 1 > 0
             ORDER BY s.pp DESC
             LIMIT :limit OFFSET :offset
         """
