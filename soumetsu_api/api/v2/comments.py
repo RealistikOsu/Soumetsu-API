@@ -6,6 +6,7 @@ from fastapi import Response
 from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
+from soumetsu_api.api.v2.context import OptionalAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.services import comments
@@ -92,12 +93,14 @@ async def delete_comment(
     response_model=response.BaseResponse[list[CommentResponse]],
 )
 async def list_profile_comments(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     profile_id: int,
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await comments.list_profile_comments(ctx, profile_id, page, limit)
+    result = await comments.list_profile_comments(
+        ctx, profile_id, page, limit, viewer=ctx.session
+    )
     result = response.unwrap(result)
 
     return response.create([_to_response(c) for c in result])

@@ -11,6 +11,7 @@ from soumetsu_api.adapters import discord as discord_oauth_client
 from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.discord_oauth import DiscordOAuthData
+from soumetsu_api.resources.sessions import SessionData
 from soumetsu_api.resources.users import ClanInfo
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -135,13 +136,14 @@ class UserCard:
 async def get_card(
     ctx: AbstractContext,
     user_id: int,
+    viewer: SessionData | None = None,
 ) -> UserError.OnSuccess[UserCard]:
     user = await ctx.users.find_by_id(user_id)
     if not user:
         return UserError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return UserError.USER_RESTRICTED
 
     pref = await ctx.user_stats.get_preferred_mode_stats(user_id)
@@ -176,6 +178,7 @@ async def get_profile(
     user_id: int,
     mode: int = 0,
     custom_mode: int = 0,
+    viewer: SessionData | None = None,
 ) -> UserError.OnSuccess[UserProfile]:
     if not is_valid_mode(mode):
         return UserError.INVALID_MODE
@@ -188,7 +191,7 @@ async def get_profile(
         return UserError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return UserError.USER_RESTRICTED
 
     stats = await ctx.user_stats.get_stats(user_id, mode, custom_mode)

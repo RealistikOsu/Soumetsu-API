@@ -7,6 +7,7 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api.resources.comments import CommentData
+from soumetsu_api.resources.sessions import SessionData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import privileges
@@ -75,13 +76,14 @@ async def list_profile_comments(
     profile_id: int,
     page: int = 1,
     limit: int = 50,
+    viewer: SessionData | None = None,
 ) -> CommentError.OnSuccess[list[CommentResult]]:
     user = await ctx.users.find_by_id(profile_id)
     if not user:
         return CommentError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return CommentError.USER_RESTRICTED
 
     if limit > 100:

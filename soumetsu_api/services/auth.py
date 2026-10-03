@@ -83,7 +83,7 @@ async def login(
     if privileges.is_pending_verification(user_privs):
         return AuthError.ACCOUNT_PENDING
 
-    if privileges.is_restricted(user_privs):
+    if privileges.is_banned(user_privs):
         return AuthError.ACCOUNT_RESTRICTED
 
     token = await ctx.sessions.create(

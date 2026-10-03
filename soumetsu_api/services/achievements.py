@@ -5,6 +5,7 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.resources.sessions import SessionData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import privileges
@@ -42,13 +43,14 @@ class AchievementResult:
 async def get_user_achievements(
     ctx: AbstractContext,
     user_id: int,
+    viewer: SessionData | None = None,
 ) -> AchievementError.OnSuccess[list[AchievementResult]]:
     user = await ctx.users.find_by_id(user_id)
     if not user:
         return AchievementError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return AchievementError.USER_RESTRICTED
 
     all_achievements = await ctx.achievements.get_all()

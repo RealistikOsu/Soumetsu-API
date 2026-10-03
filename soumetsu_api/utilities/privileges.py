@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from enum import IntFlag
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from soumetsu_api.resources.sessions import SessionData
 
 
 class UserPrivileges(IntFlag):
@@ -101,8 +105,25 @@ def has_privilege(privileges: int, required: int) -> bool:
     return (privileges & required) == required
 
 
+# Restricted accounts keep NORMAL but lose PUBLIC; banned ones lose both.
 def is_restricted(user_privileges: UserPrivileges) -> bool:
+    return not bool(user_privileges & UserPrivileges.PUBLIC)
+
+
+def is_banned(user_privileges: UserPrivileges) -> bool:
     return not bool(user_privileges & UserPrivileges.NORMAL)
+
+
+# A restricted player stays visible to themselves and to staff who manage users, as on Hanayo.
+def can_view(
+    user_id: int, user_privileges: UserPrivileges, viewer: SessionData | None
+) -> bool:
+    if not is_restricted(user_privileges):
+        return True
+    return viewer is not None and (
+        viewer.user_id == user_id
+        or has_privilege(viewer.privileges, UserPrivileges.ADMIN_MANAGE_USERS)
+    )
 
 
 def is_pending_verification(user_privileges: UserPrivileges) -> bool:

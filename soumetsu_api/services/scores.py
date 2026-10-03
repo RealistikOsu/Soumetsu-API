@@ -11,6 +11,7 @@ from soumetsu_api.resources.scores import ScoreData
 from soumetsu_api.resources.scores import ScoreTopPlay
 from soumetsu_api.resources.scores import ScoreTopPlayWithMode
 from soumetsu_api.resources.scores import ScoreWithBeatmap
+from soumetsu_api.resources.sessions import SessionData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import privileges
@@ -167,13 +168,14 @@ async def get_player_best(
     custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
+    viewer: SessionData | None = None,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
     user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return ScoreError.USER_RESTRICTED
 
     if limit > 100:
@@ -198,13 +200,14 @@ async def get_player_recent(
     page: int = 1,
     limit: int = 50,
     exclude_failed: bool = False,
+    viewer: SessionData | None = None,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
     user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return ScoreError.USER_RESTRICTED
 
     if limit > 100:
@@ -229,13 +232,14 @@ async def get_player_firsts(
     custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
+    viewer: SessionData | None = None,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
     user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return ScoreError.USER_RESTRICTED
 
     if limit > 100:
@@ -259,13 +263,14 @@ async def get_player_pinned(
     custom_mode: int = 0,
     page: int = 1,
     limit: int = 50,
+    viewer: SessionData | None = None,
 ) -> ScoreError.OnSuccess[list[ScoreWithBeatmapResult]]:
     user = await ctx.users.find_by_id(player_id)
     if not user:
         return ScoreError.USER_NOT_FOUND
 
     user_privs = privileges.UserPrivileges(user.privileges)
-    if privileges.is_restricted(user_privs):
+    if not privileges.can_view(user.id, user_privs, viewer):
         return ScoreError.USER_RESTRICTED
 
     if limit > 100:

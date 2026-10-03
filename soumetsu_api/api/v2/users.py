@@ -54,7 +54,9 @@ class DiscordProfileInfo(BaseModel):
     avatar: str
 
 
-def _discord_to_response(discord: users.DiscordLink | None) -> DiscordProfileInfo | None:
+def _discord_to_response(
+    discord: users.DiscordLink | None,
+) -> DiscordProfileInfo | None:
     if discord is None:
         return None
     return DiscordProfileInfo(
@@ -212,7 +214,9 @@ async def get_me(
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await users.get_profile(ctx, ctx.user_id, mode, custom_mode)
+    result = await users.get_profile(
+        ctx, ctx.user_id, mode, custom_mode, viewer=ctx.session
+    )
     result = response.unwrap(result)
 
     clan = None
@@ -443,11 +447,11 @@ async def delete_banner(ctx: RequiresAuth) -> Response:
 
 @router.get("/{user_id}/card", response_model=response.BaseResponse[UserCardResponse])
 async def get_user_card(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
 ) -> Response:
     """Get minimal user info for hover cards. Optimized for fast loading."""
-    result = await users.get_card(ctx, user_id)
+    result = await users.get_card(ctx, user_id, viewer=ctx.session)
     result = response.unwrap(result)
 
     return response.create(
@@ -469,12 +473,14 @@ async def get_user_card(
 
 @router.get("/{user_id}", response_model=response.BaseResponse[UserProfileResponse])
 async def get_user(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await users.get_profile(ctx, user_id, mode, custom_mode)
+    result = await users.get_profile(
+        ctx, user_id, mode, custom_mode, viewer=ctx.session
+    )
     result = response.unwrap(result)
 
     clan = None
@@ -545,12 +551,14 @@ class CommentResponse(BaseModel):
     response_model=response.BaseResponse[list[CommentResponse]],
 )
 async def list_profile_comments(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await comments.list_profile_comments(ctx, user_id, page, limit)
+    result = await comments.list_profile_comments(
+        ctx, user_id, page, limit, viewer=ctx.session
+    )
     result = response.unwrap(result)
 
     return response.create(
@@ -606,10 +614,10 @@ class AchievementResponse(BaseModel):
     response_model=response.BaseResponse[list[AchievementResponse]],
 )
 async def get_user_achievements(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
 ) -> Response:
-    result = await achievements.get_user_achievements(ctx, user_id)
+    result = await achievements.get_user_achievements(ctx, user_id, viewer=ctx.session)
     result = response.unwrap(result)
 
     return response.create(
@@ -643,12 +651,14 @@ class PPHistoryResponse(BaseModel):
     response_model=response.BaseResponse[list[RankHistoryResponse]],
 )
 async def get_user_rank_history(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await user_history.get_rank_history(ctx, user_id, mode, custom_mode)
+    result = await user_history.get_rank_history(
+        ctx, user_id, mode, custom_mode, viewer=ctx.session
+    )
     result = response.unwrap(result)
 
     return response.create(
@@ -668,12 +678,14 @@ async def get_user_rank_history(
     response_model=response.BaseResponse[list[PPHistoryResponse]],
 )
 async def get_user_pp_history(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
-    result = await user_history.get_pp_history(ctx, user_id, mode, custom_mode)
+    result = await user_history.get_pp_history(
+        ctx, user_id, mode, custom_mode, viewer=ctx.session
+    )
     result = response.unwrap(result)
 
     return response.create(

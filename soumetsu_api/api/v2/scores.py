@@ -6,6 +6,7 @@ from fastapi import Response
 from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
+from soumetsu_api.api.v2.context import OptionalAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.constants import CustomMode
@@ -246,14 +247,16 @@ def _to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
 async def get_player_best(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await scores.get_player_best(ctx, user_id, mode, custom_mode, page, limit)
+    result = await scores.get_player_best(
+        ctx, user_id, mode, custom_mode, page, limit, viewer=ctx.session
+    )
     result = response.unwrap(result)
 
     return response.create([_to_response(s) for s in result])
@@ -264,7 +267,7 @@ async def get_player_best(
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
 async def get_player_recent(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
@@ -280,6 +283,7 @@ async def get_player_recent(
         page,
         limit,
         exclude_failed,
+        viewer=ctx.session,
     )
     result = response.unwrap(result)
 
@@ -291,7 +295,7 @@ async def get_player_recent(
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
 async def get_player_firsts(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
@@ -305,6 +309,7 @@ async def get_player_firsts(
         custom_mode,
         page,
         limit,
+        viewer=ctx.session,
     )
     result = response.unwrap(result)
 
@@ -316,7 +321,7 @@ async def get_player_firsts(
     response_model=response.BaseResponse[list[ScoreWithBeatmapResponse]],
 )
 async def get_player_pinned(
-    ctx: RequiresContext,
+    ctx: OptionalAuth,
     user_id: int,
     mode: GameMode = Query(GameMode.STD),
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
@@ -330,6 +335,7 @@ async def get_player_pinned(
         custom_mode,
         page,
         limit,
+        viewer=ctx.session,
     )
     result = response.unwrap(result)
 
