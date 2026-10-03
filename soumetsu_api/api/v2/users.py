@@ -710,13 +710,21 @@ class MostPlayedResponse(BaseModel):
     playcount: int
 
 
+class ProfileDifficultyResponse(BaseModel):
+    beatmap_id: int
+    version: str
+    mode: int
+    stars: float
+
+
 class ProfileBeatmapSetResponse(BaseModel):
     beatmapset_id: int
-    beatmap_id: int
+    artist: str
     title: str
+    creator: str | None
     status: int
-    difficulties: int
     time: int
+    difficulties: list[ProfileDifficultyResponse]
 
 
 def _sets_response(result: list[beatmaps.ProfileBeatmapSet]) -> Response:
@@ -724,11 +732,20 @@ def _sets_response(result: list[beatmaps.ProfileBeatmapSet]) -> Response:
         [
             ProfileBeatmapSetResponse(
                 beatmapset_id=s.beatmapset_id,
-                beatmap_id=s.beatmap_id,
+                artist=s.artist,
                 title=s.title,
+                creator=s.creator,
                 status=s.status,
-                difficulties=s.difficulties,
                 time=s.time,
+                difficulties=[
+                    ProfileDifficultyResponse(
+                        beatmap_id=d.beatmap_id,
+                        version=d.version,
+                        mode=d.mode,
+                        stars=d.stars,
+                    )
+                    for d in s.difficulties
+                ],
             )
             for s in result
         ],

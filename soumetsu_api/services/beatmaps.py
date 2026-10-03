@@ -168,18 +168,32 @@ class MostPlayedResult:
 
 
 @dataclass
+class ProfileDifficulty:
+    beatmap_id: int
+    version: str
+    mode: int
+    stars: float
+
+
+@dataclass
 class ProfileBeatmapSet:
     beatmapset_id: int
-    beatmap_id: int
+    artist: str
     title: str
+    # Known for maps uploaded here; osu!'s own maps leave it to the mirror.
+    creator: str | None
     status: int
-    difficulties: int
     time: int
+    difficulties: list[ProfileDifficulty]
 
 
-def _set_title(song_name: str) -> str:
+def _split_song(song_name: str) -> tuple[str, str, str]:
     # song_name is one difficulty's "Artist - Title [Difficulty]".
-    return song_name.rsplit(" [", 1)[0] if song_name.endswith("]") else song_name
+    song, version = song_name, ""
+    if song_name.endswith("]") and " [" in song_name:
+        song, version = song_name[:-1].rsplit(" [", 1)
+    artist, _, title = song.partition(" - ")
+    return (artist, title, version) if title else ("", song, version)
 
 
 async def list_user_sets(
@@ -196,18 +210,41 @@ async def list_user_sets(
         if kind == "ranked"
         else ctx.beatmaps.list_user_mapped_sets
     )
-    rows = await lister(user_id, limit, offset)
-    return [
-        ProfileBeatmapSet(
-            beatmapset_id=r.beatmapset_id,
-            beatmap_id=r.beatmap_id,
-            title=_set_title(r.song_name),
-            status=r.status,
-            difficulties=r.difficulties,
-            time=r.time,
+    sets = await lister(user_id, limit, offset)
+    diffs = await ctx.beatmaps.list_set_difficulties(
+        [s.beatmapset_id for s in sets],
+        ranked_by=user_id if kind == "ranked" else None,
+    )
+
+    result = []
+    for s in sets:
+        mine = sorted(
+            (d for d in diffs if d.beatmapset_id == s.beatmapset_id),
+            key=lambda d: d.stars,
         )
-        for r in rows
-    ]
+        if not mine:
+            continue
+        artist, title, _ = _split_song(mine[0].song_name)
+        result.append(
+            ProfileBeatmapSet(
+                beatmapset_id=s.beatmapset_id,
+                artist=artist,
+                title=title,
+                creator=mine[0].mapper,
+                status=s.status,
+                time=s.time,
+                difficulties=[
+                    ProfileDifficulty(
+                        beatmap_id=d.beatmap_id,
+                        version=_split_song(d.song_name)[2],
+                        mode=d.mode,
+                        stars=d.stars,
+                    )
+                    for d in mine
+                ],
+            ),
+        )
+    return result
 
 
 async def get_user_most_played(

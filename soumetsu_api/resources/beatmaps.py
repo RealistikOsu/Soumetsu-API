@@ -42,11 +42,17 @@ class MostPlayedBeatmapData(BaseModel):
 
 class ProfileBeatmapSetData(BaseModel):
     beatmapset_id: int
+    status: int
+    time: int
+
+
+class ProfileDifficultyData(BaseModel):
+    beatmapset_id: int
     beatmap_id: int
     song_name: str
-    status: int
-    difficulties: int
-    time: int
+    mode: int
+    stars: float
+    mapper: str | None
 
 
 class RankRequestData(BaseModel):
@@ -243,9 +249,7 @@ class BeatmapsRepository:
     ) -> list[ProfileBeatmapSetData]:
         # A difficulty only counts while it still has the status this user gave it.
         rows = await self._mysql.fetch_all(
-            """SELECT b.beatmapset_id, MIN(b.beatmap_id) AS beatmap_id,
-                      MIN(b.song_name) AS song_name, MIN(r.status) AS status,
-                      COUNT(*) AS difficulties, MAX(r.ranked_at) AS time
+            """SELECT b.beatmapset_id, MIN(r.status) AS status, MAX(r.ranked_at) AS time
                FROM beatmap_rankers r
                INNER JOIN beatmaps b ON b.beatmap_id = r.beatmap_id AND b.ranked = r.status
                WHERE r.user_id = :user_id
@@ -265,9 +269,7 @@ class BeatmapsRepository:
         # Only maps uploaded to this server have a mapper_id, and those all get set IDs from 1000000000 up,
         # which lets MySQL use the set index instead of scanning every beatmap.
         rows = await self._mysql.fetch_all(
-            """SELECT beatmapset_id, MIN(beatmap_id) AS beatmap_id,
-                      MIN(song_name) AS song_name, MAX(ranked) AS status,
-                      COUNT(*) AS difficulties, MAX(latest_update) AS time
+            """SELECT beatmapset_id, MAX(ranked) AS status, MAX(latest_update) AS time
                FROM beatmaps
                WHERE beatmapset_id >= 1000000000 AND mapper_id = :user_id
                GROUP BY beatmapset_id
@@ -276,6 +278,43 @@ class BeatmapsRepository:
             {"user_id": user_id, "limit": limit, "offset": offset},
         )
         return [ProfileBeatmapSetData(**row) for row in rows]
+
+    async def list_set_difficulties(
+        self,
+        set_ids: list[int],
+        ranked_by: int | None = None,
+    ) -> list[ProfileDifficultyData]:
+        if not set_ids:
+            return []
+        # For a ranker's list, only the difficulties they gave their current status to.
+        ranker_join = (
+            """INNER JOIN beatmap_rankers r ON r.beatmap_id = b.beatmap_id
+                 AND r.user_id = :ranked_by AND b.ranked = r.status"""
+            if ranked_by is not None
+            else ""
+        )
+        placeholders = ", ".join(f":set_{i}" for i in range(len(set_ids)))
+        params: dict[str, int] = {
+            f"set_{i}": set_id for i, set_id in enumerate(set_ids)
+        }
+        if ranked_by is not None:
+            params["ranked_by"] = ranked_by
+        rows = await self._mysql.fetch_all(
+            f"""SELECT b.beatmapset_id, b.beatmap_id, b.song_name, b.mode,
+                       CASE b.mode
+                           WHEN 1 THEN b.difficulty_taiko
+                           WHEN 2 THEN b.difficulty_ctb
+                           WHEN 3 THEN b.difficulty_mania
+                           ELSE b.difficulty_std
+                       END AS stars,
+                       u.username AS mapper
+                FROM beatmaps b
+                {ranker_join}
+                LEFT JOIN users u ON u.id = b.mapper_id
+                WHERE b.beatmapset_id IN ({placeholders})""",
+            params,
+        )
+        return [ProfileDifficultyData(**row) for row in rows]
 
     async def count_recent_rank_requests(self) -> int:
         since = int(time_module.time()) - _DAY
