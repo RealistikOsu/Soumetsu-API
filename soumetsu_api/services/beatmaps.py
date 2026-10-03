@@ -184,6 +184,8 @@ class ProfileBeatmapSet:
     title: str
     # Known for maps uploaded here; osu!'s own maps leave it to the mirror.
     creator: str | None
+    # Set only for maps uploaded here: the uploader's user ID.
+    creator_id: int | None
     status: int
     time: int
     difficulties: list[ProfileDifficulty]
@@ -239,6 +241,7 @@ async def list_user_sets(
                 artist=artist,
                 title=title,
                 creator=mine[0].mapper,
+                creator_id=mine[0].mapper_id if mine[0].mapper_id > 0 else None,
                 status=_common_status(mine),
                 time=s.time,
                 difficulties=[

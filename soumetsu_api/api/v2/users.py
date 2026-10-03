@@ -722,6 +722,7 @@ class ProfileBeatmapSetResponse(BaseModel):
     artist: str
     title: str
     creator: str | None
+    creator_id: int | None
     status: int
     time: int
     difficulties: list[ProfileDifficultyResponse]
@@ -735,6 +736,7 @@ def _sets_response(result: list[beatmaps.ProfileBeatmapSet]) -> Response:
                 artist=s.artist,
                 title=s.title,
                 creator=s.creator,
+                creator_id=s.creator_id,
                 status=s.status,
                 time=s.time,
                 difficulties=[

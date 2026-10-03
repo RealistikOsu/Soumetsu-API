@@ -53,6 +53,7 @@ class ProfileDifficultyData(BaseModel):
     mode: int
     status: int
     stars: float
+    mapper_id: int
     mapper: str | None
 
 
@@ -310,7 +311,7 @@ class BeatmapsRepository:
                            WHEN 3 THEN b.difficulty_mania
                            ELSE b.difficulty_std
                        END AS stars,
-                       u.username AS mapper
+                       b.mapper_id, u.username AS mapper
                 FROM beatmaps b
                 {ranker_join}
                 LEFT JOIN users u ON u.id = b.mapper_id
