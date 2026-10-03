@@ -143,6 +143,8 @@ class ScoresRepository:
         exclude_failed: bool = False,
     ) -> list[ScoreWithBeatmap]:
         table = self._get_table(custom_mode)
+        # IDs follow submission order, and sorting by them walks the index instead of sorting every one of
+        # the player's scores by time.
         passed_only = "AND s.completed + 0 >= 1" if exclude_failed else ""
         diff_col = [
             "difficulty_std",
@@ -165,7 +167,7 @@ class ScoresRepository:
             WHERE s.userid = :player_id
             AND s.play_mode + 0 = :mode
             {passed_only}
-            ORDER BY s.time DESC
+            ORDER BY s.id DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
