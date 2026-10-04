@@ -74,6 +74,6 @@ API_VERSION = "v2"
 # Two-factor: secrets are encrypted with this key (32 bytes, base64). Staff setup is confirmed by email.
 TOTP_ENCRYPTION_KEY = os.environ.get("SOUMETSUAPI_TOTP_ENCRYPTION_KEY", "")
 BREVO_API_KEY = os.environ.get("SOUMETSUAPI_BREVO_API_KEY", "")
-MAIL_SENDER_EMAIL = os.environ.get("SOUMETSUAPI_MAIL_SENDER_EMAIL", "")
-MAIL_SENDER_NAME = os.environ.get("SOUMETSUAPI_MAIL_SENDER_NAME", "RealistikOsu")
+# Same format as Soumetsu's BREVO_FROM: "RealistikOsu" <no-reply@ussr.pl>
+MAIL_FROM = os.environ.get("SOUMETSUAPI_MAIL_FROM", "")
 APP_BASE_URL = os.environ.get("SOUMETSUAPI_APP_BASE_URL", "https://ussr.pl").rstrip("/")
