@@ -22,6 +22,7 @@ from . import peppy
 from . import scores
 from . import stats
 from . import team
+from . import two_factor
 from . import users
 
 
@@ -52,6 +53,7 @@ def create_router() -> APIRouter:
     router.include_router(scores.router)
     router.include_router(stats.router)
     router.include_router(team.router)
+    router.include_router(two_factor.router)
     router.include_router(users.router)
 
     @router.get("/assets/avatars/{user_id}.png")

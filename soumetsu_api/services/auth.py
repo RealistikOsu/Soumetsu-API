@@ -56,10 +56,12 @@ class AuthError(ServiceError):
 
 @dataclass
 class LoginResult:
-    token: str
+    # None when the account has two-factor on: the login finishes with the challenge and a code instead.
+    token: str | None
     user_id: int
     username: str
     privileges: int
+    two_factor_challenge: str | None = None
 
 
 async def login(
@@ -85,6 +87,20 @@ async def login(
 
     if privileges.is_banned(user_privs):
         return AuthError.ACCOUNT_RESTRICTED
+
+    two_factor = await ctx.two_factor.get(user.id)
+    if two_factor and two_factor.confirmed:
+        return LoginResult(
+            token=None,
+            user_id=user.id,
+            username=user.username,
+            privileges=user.privileges,
+            two_factor_challenge=await ctx.two_factor.create_challenge(
+                user.id,
+                user.privileges,
+                ip_address,
+            ),
+        )
 
     token = await ctx.sessions.create(
         user_id=user.id,

@@ -14,6 +14,7 @@ from . import leaderboard
 from . import scores
 from . import sessions
 from . import stats
+from . import two_factor
 from . import user_files
 from . import user_history
 from . import user_stats
@@ -35,6 +36,7 @@ from .scores import ScoresRepository
 from .sessions import SessionData
 from .sessions import SessionRepository
 from .stats import StatsRepository
+from .two_factor import TwoFactorRepository
 from .user_files import UserFilesRepository
 from .user_history import UserHistoryRepository
 from .user_stats import UserStatsRepository

@@ -19,6 +19,8 @@ class SessionData:
     created_at: int
     expires_at: int
     ip_address: str
+    # Whether this login passed two-factor. Staff privileges only count in sessions that did.
+    mfa: bool = False
 
 
 class SessionRepository:
@@ -32,6 +34,7 @@ class SessionRepository:
         user_id: int,
         privileges: int,
         ip_address: str,
+        mfa: bool = False,
     ) -> str:
         token = crypto.generate_token(32)
         token_hash = crypto.hash_token_sha256(token)
@@ -43,6 +46,7 @@ class SessionRepository:
             created_at=now,
             expires_at=now + settings.SESSION_TTL_SECONDS,
             ip_address=ip_address,
+            mfa=mfa,
         )
 
         session_key = f"{SESSION_KEY_PREFIX}{token_hash}"
@@ -85,6 +89,16 @@ class SessionRepository:
             )
 
         return session
+
+    # Setting up two-factor upgrades the session it was done in, so the user isn't sent back to log in.
+    async def mark_mfa(self, token: str) -> None:
+        key = f"{SESSION_KEY_PREFIX}{crypto.hash_token_sha256(token)}"
+        data = await self._redis.get(key)
+        if not data:
+            return
+        session_dict = json.loads(data)
+        session_dict["mfa"] = True
+        await self._redis.set(key, json.dumps(session_dict), keepttl=True)
 
     async def delete(self, token: str) -> bool:
         token_hash = crypto.hash_token_sha256(token)

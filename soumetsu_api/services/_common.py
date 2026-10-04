@@ -28,6 +28,7 @@ from soumetsu_api.resources import ExampleRepository
 from soumetsu_api.resources import FriendsRepository
 from soumetsu_api.resources import LeaderboardRepository
 from soumetsu_api.resources import ScoresRepository
+from soumetsu_api.resources import TwoFactorRepository
 from soumetsu_api.resources import SessionRepository
 from soumetsu_api.resources import StatsRepository
 from soumetsu_api.resources import UserFilesRepository
@@ -94,6 +95,10 @@ class AbstractContext(ABC):
     @property
     def stats(self) -> StatsRepository:
         return StatsRepository(self._redis)
+
+    @property
+    def two_factor(self) -> TwoFactorRepository:
+        return TwoFactorRepository(self._mysql, self._redis)
 
     @property
     def scores(self) -> ScoresRepository:

@@ -23,10 +23,11 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    token: str
+    token: str | None
     user_id: int
     username: str
     privileges: int
+    two_factor_challenge: str | None = None
 
 
 class RegisterRequest(BaseModel):
@@ -44,6 +45,7 @@ class RegisterResponse(BaseModel):
 class SessionResponse(BaseModel):
     user_id: int
     privileges: int
+    mfa: bool
     created_at: int
     expires_at: int
 
@@ -81,6 +83,7 @@ async def login(
             user_id=result.user_id,
             username=result.username,
             privileges=result.privileges,
+            two_factor_challenge=result.two_factor_challenge,
         ),
     )
 
@@ -130,7 +133,8 @@ async def get_session(ctx: RequiresAuth) -> Response:
     return response.create(
         SessionResponse(
             user_id=ctx.session.user_id,
-            privileges=ctx.session.privileges,
+            privileges=ctx.privileges,
+            mfa=ctx.session.mfa,
             created_at=ctx.session.created_at,
             expires_at=ctx.session.expires_at,
         ),

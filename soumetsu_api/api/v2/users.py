@@ -178,7 +178,7 @@ async def search_users(
 ) -> Response:
     # Staff who manage users can find restricted players too, everyone else only sees public ones.
     staff = ctx.session is not None and privileges.has_privilege(
-        ctx.session.privileges,
+        privileges.effective(ctx.session.privileges, ctx.session.mfa),
         privileges.UserPrivileges.ADMIN_MANAGE_USERS,
     )
     result = await users.search_users(ctx, q, page, limit, include_restricted=staff)

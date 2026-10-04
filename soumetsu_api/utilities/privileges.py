@@ -105,6 +105,24 @@ def has_privilege(privileges: int, required: int) -> bool:
     return (privileges & required) == required
 
 
+# What a session may use: staff privileges only count once the login passed two-factor, so a stolen or reset
+# password alone can't reach anything staff can.
+PLAYER_PRIVILEGES = (
+    UserPrivileges.PUBLIC
+    | UserPrivileges.NORMAL
+    | UserPrivileges.DONOR
+    | UserPrivileges.PENDING_VERIFICATION
+)
+
+
+def effective(user_privileges: int, mfa: bool) -> int:
+    return user_privileges if mfa else user_privileges & PLAYER_PRIVILEGES
+
+
+def is_staff(user_privileges: int) -> bool:
+    return has_privilege(user_privileges, UserPrivileges.ADMIN_ACCESS_RAP)
+
+
 # Restricted accounts keep NORMAL but lose PUBLIC; banned ones lose both.
 def is_restricted(user_privileges: UserPrivileges) -> bool:
     return not bool(user_privileges & UserPrivileges.PUBLIC)
@@ -122,7 +140,10 @@ def can_view(
         return True
     return viewer is not None and (
         viewer.user_id == user_id
-        or has_privilege(viewer.privileges, UserPrivileges.ADMIN_MANAGE_USERS)
+        or has_privilege(
+            effective(viewer.privileges, viewer.mfa),
+            UserPrivileges.ADMIN_MANAGE_USERS,
+        )
     )
 
 

@@ -27,6 +27,7 @@ from soumetsu_api.adapters.storage import StorageAdapter
 from soumetsu_api.resources import SessionData
 from soumetsu_api.resources import SessionRepository
 from soumetsu_api.services import AbstractContext
+from soumetsu_api.utilities import privileges
 
 
 class HTTPContext(AbstractContext):
@@ -87,7 +88,7 @@ class AuthenticatedContext(HTTPContext):
         super().__init__(request)
         self.session = session
         self.user_id = session.user_id
-        self.privileges = session.privileges
+        self.privileges = privileges.effective(session.privileges, session.mfa)
 
 
 class AuthenticatedTransactionContext(HTTPTransactionContext):
@@ -101,7 +102,7 @@ class AuthenticatedTransactionContext(HTTPTransactionContext):
         super().__init__(mysql, redis, storage)
         self.session = session
         self.user_id = session.user_id
-        self.privileges = session.privileges
+        self.privileges = privileges.effective(session.privileges, session.mfa)
 
 
 async def _get_transaction_context(
