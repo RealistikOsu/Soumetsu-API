@@ -36,6 +36,8 @@ class UserForLogin(BaseModel):
     email: str
 
 
+# A deleted account is anonymised rather than removed, so its scores stay on beatmap leaderboards; every
+# lookup here leaves it out, which makes its profile, card and search entry disappear.
 class UserRepository:
     __slots__ = ("_mysql",)
 
@@ -46,7 +48,7 @@ class UserRepository:
         row = await self._mysql.fetch_one(
             """SELECT id, username, username_safe, privileges, country,
                       register_datetime as registered_at, latest_activity, coins
-               FROM users WHERE id = :id""",
+               FROM users WHERE id = :id AND deleted = 0""",
             {"id": user_id},
         )
         return User(**row) if row else None
@@ -56,7 +58,7 @@ class UserRepository:
         row = await self._mysql.fetch_one(
             """SELECT id, username, username_safe, privileges, country,
                       register_datetime as registered_at, latest_activity, coins
-               FROM users WHERE username_safe = :username_safe""",
+               FROM users WHERE username_safe = :username_safe AND deleted = 0""",
             {"username_safe": username_safe},
         )
         return User(**row) if row else None
@@ -66,7 +68,7 @@ class UserRepository:
             row = await self._mysql.fetch_one(
                 """SELECT id, username, username_safe, password_md5,
                           password_version, privileges, email
-                   FROM users WHERE email = :email""",
+                   FROM users WHERE email = :email AND deleted = 0""",
                 {"email": identifier},
             )
         else:
@@ -74,7 +76,7 @@ class UserRepository:
             row = await self._mysql.fetch_one(
                 """SELECT id, username, username_safe, password_md5,
                           password_version, privileges, email
-                   FROM users WHERE username_safe = :username_safe""",
+                   FROM users WHERE username_safe = :username_safe AND deleted = 0""",
                 {"username_safe": username_safe},
             )
         return UserForLogin(**row) if row else None
@@ -157,7 +159,7 @@ class UserRepository:
             f"""SELECT id, username, username_safe, privileges, country,
                       register_datetime as registered_at, latest_activity, coins
                FROM users
-               WHERE username LIKE :pattern
+               WHERE username LIKE :pattern AND deleted = 0
                {visibility}
                ORDER BY latest_activity DESC
                LIMIT :limit OFFSET :offset""",
