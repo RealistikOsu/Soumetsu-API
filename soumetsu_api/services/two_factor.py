@@ -12,8 +12,11 @@ from soumetsu_api.resources.two_factor import TwoFactorData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.services.auth import LoginResult
+from soumetsu_api.utilities import logging
 from soumetsu_api.utilities import privileges
 from soumetsu_api.utilities import totp
+
+logger = logging.get_logger(__name__)
 
 
 class TwoFactorError(ServiceError):
@@ -87,6 +90,10 @@ async def send_setup_link(
     email = await ctx.users.get_email(user_id)
     user = await ctx.users.find_by_id(user_id)
     if not email or not user:
+        logger.warning(
+            "No email to send the two-factor setup link to.",
+            extra={"user_id": user_id},
+        )
         return TwoFactorError.MAIL_FAILED
 
     token = await ctx.two_factor.create_setup_token(user_id)
@@ -100,7 +107,11 @@ async def send_setup_link(
             "continue. The link works for 30 minutes.<br><br>If this wasn't you, your password may "
             "be known to someone else: change it, and let the staff team know.",
         )
-    except mail.MailError:
+    except mail.MailError as error:
+        logger.warning(
+            "Could not send the two-factor setup link.",
+            extra={"user_id": user_id, "error": str(error)},
+        )
         return TwoFactorError.MAIL_FAILED
     return None
 
