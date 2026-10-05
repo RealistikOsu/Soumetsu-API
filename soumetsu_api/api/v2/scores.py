@@ -255,7 +255,7 @@ async def get_player_best(
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
     result = await scores.get_player_best(
-        ctx, user_id, mode, custom_mode, page, limit, viewer=ctx.session
+        ctx, user_id, mode, custom_mode, page, limit, viewer=ctx.session,
     )
     result = response.unwrap(result)
 

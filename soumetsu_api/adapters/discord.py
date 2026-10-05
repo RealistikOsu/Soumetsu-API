@@ -86,7 +86,9 @@ async def lookup_user(discord_id: str) -> DiscordUser | None:
 
     try:
         async with httpx.AsyncClient(timeout=3) as client:
-            response = await client.get(f"{settings.DISCORD_USER_LOOKUP_URL}/{discord_id}")
+            response = await client.get(
+                f"{settings.DISCORD_USER_LOOKUP_URL}/{discord_id}",
+            )
     except httpx.HTTPError:
         _lookups[discord_id] = (time.monotonic() + _FAILED_TTL_SECONDS, None)
         return None
