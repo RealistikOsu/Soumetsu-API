@@ -28,9 +28,10 @@ from soumetsu_api.resources import ExampleRepository
 from soumetsu_api.resources import FriendsRepository
 from soumetsu_api.resources import LeaderboardRepository
 from soumetsu_api.resources import ScoresRepository
-from soumetsu_api.resources import TwoFactorRepository
 from soumetsu_api.resources import SessionRepository
 from soumetsu_api.resources import StatsRepository
+from soumetsu_api.resources import TwoFactorRepository
+from soumetsu_api.resources import UploadRequestsRepository
 from soumetsu_api.resources import UserFilesRepository
 from soumetsu_api.resources import UserHistoryRepository
 from soumetsu_api.resources import UserRepository
@@ -139,6 +140,10 @@ class AbstractContext(ABC):
     @property
     def achievements(self) -> AchievementsRepository:
         return AchievementsRepository(self._mysql)
+
+    @property
+    def upload_requests(self) -> UploadRequestsRepository:
+        return UploadRequestsRepository(self._mysql)
 
     @property
     def user_history(self) -> UserHistoryRepository:

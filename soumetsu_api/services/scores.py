@@ -119,7 +119,7 @@ def _score_to_result(score: ScoreData) -> ScoreResult:
     )
 
 
-def _score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapResult:
+def score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapResult:
     return ScoreWithBeatmapResult(
         id=score.id,
         beatmap_md5=score.beatmap_md5,
@@ -189,7 +189,7 @@ async def get_player_best(
         limit,
         offset,
     )
-    return [_score_with_beatmap_to_result(s) for s in scores]
+    return [score_with_beatmap_to_result(s) for s in scores]
 
 
 async def get_player_recent(
@@ -222,7 +222,7 @@ async def get_player_recent(
         offset,
         exclude_failed,
     )
-    return [_score_with_beatmap_to_result(s) for s in scores]
+    return [score_with_beatmap_to_result(s) for s in scores]
 
 
 async def get_player_firsts(
@@ -253,7 +253,7 @@ async def get_player_firsts(
         limit,
         offset,
     )
-    return [_score_with_beatmap_to_result(s) for s in scores]
+    return [score_with_beatmap_to_result(s) for s in scores]
 
 
 async def get_player_pinned(
@@ -284,7 +284,7 @@ async def get_player_pinned(
         limit,
         offset,
     )
-    return [_score_with_beatmap_to_result(s) for s in scores]
+    return [score_with_beatmap_to_result(s) for s in scores]
 
 
 def _top_play_to_result(score: ScoreTopPlay) -> ScoreTopPlayResult:

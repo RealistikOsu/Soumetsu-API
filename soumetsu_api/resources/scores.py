@@ -93,6 +93,37 @@ class ScoresRepository:
 
         return ScoreData(**row)
 
+    async def list_with_beatmap(
+        self,
+        score_ids: list[int],
+        custom_mode: int,
+    ) -> list[ScoreWithBeatmap]:
+        table = self._get_table(custom_mode)
+        placeholders = ", ".join(f":id{i}" for i in range(len(score_ids)))
+        query = f"""
+            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
+                   s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
+                   s.100_count as count_100, s.50_count as count_50,
+                   s.katus_count as count_katus, s.gekis_count as count_gekis,
+                   s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   b.beatmap_id, b.beatmapset_id, b.song_name, b.ranked,
+                   CASE s.play_mode
+                       WHEN 0 THEN b.difficulty_std
+                       WHEN 1 THEN b.difficulty_taiko
+                       WHEN 2 THEN b.difficulty_ctb
+                       ELSE b.difficulty_mania
+                   END as difficulty
+            FROM {table} s
+            INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
+            WHERE s.id IN ({placeholders})
+        """
+        rows = await self._mysql.fetch_all(
+            query,
+            {f"id{i}": score_id for i, score_id in enumerate(score_ids)},
+        )
+        return [ScoreWithBeatmap(**row) for row in rows]
+
     async def list_player_best(
         self,
         player_id: int,

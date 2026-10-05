@@ -34,6 +34,7 @@ API available at `http://localhost:8000/api/v2/health`
 | `/api/v2/clans` | Clan CRUD, membership, invites |
 | `/api/v2/friends` | Friend list management |
 | `/api/v2/comments` | User profile comments |
+| `/api/v2/upload-requests` | Requests for plays to go on the YouTube channel, with votes and staff review |
 | `/api/v2/admin` | Admin operations (requires privileges) |
 | `/api/v2/peppy` | osu! legacy API compatibility |
 

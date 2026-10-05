@@ -211,7 +211,7 @@ async def unpin_score(
     return response.create(None)
 
 
-def _to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
+def to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
     return ScoreWithBeatmapResponse(
         id=s.id,
         beatmap_md5=s.beatmap_md5,
@@ -259,7 +259,7 @@ async def get_player_best(
     )
     result = response.unwrap(result)
 
-    return response.create([_to_response(s) for s in result])
+    return response.create([to_response(s) for s in result])
 
 
 @router.get(
@@ -287,7 +287,7 @@ async def get_player_recent(
     )
     result = response.unwrap(result)
 
-    return response.create([_to_response(s) for s in result])
+    return response.create([to_response(s) for s in result])
 
 
 @router.get(
@@ -313,7 +313,7 @@ async def get_player_firsts(
     )
     result = response.unwrap(result)
 
-    return response.create([_to_response(s) for s in result])
+    return response.create([to_response(s) for s in result])
 
 
 @router.get(
@@ -339,4 +339,4 @@ async def get_player_pinned(
     )
     result = response.unwrap(result)
 
-    return response.create([_to_response(s) for s in result])
+    return response.create([to_response(s) for s in result])
