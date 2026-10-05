@@ -130,6 +130,14 @@ async def is_friend(
     return await ctx.friends.is_friend(user_id, friend_id)
 
 
+async def is_mutual(
+    ctx: AbstractContext,
+    user_id: int,
+    friend_id: int,
+) -> bool:
+    return await ctx.friends.is_mutual(user_id, friend_id)
+
+
 async def get_relationships(
     ctx: AbstractContext,
     user_id: int,

@@ -27,6 +27,7 @@ class RelationshipsResponse(BaseModel):
 
 class IsFriendResponse(BaseModel):
     is_friend: bool
+    mutual: bool
 
 
 def _to_response(f: friends.FriendResult) -> FriendResponse:
@@ -77,8 +78,9 @@ async def is_friend(
 ) -> Response:
     result = await friends.is_friend(ctx, ctx.user_id, user_id)
     result = response.unwrap(result)
+    mutual = result and await friends.is_mutual(ctx, ctx.user_id, user_id)
 
-    return response.create(IsFriendResponse(is_friend=result))
+    return response.create(IsFriendResponse(is_friend=result, mutual=mutual))
 
 
 @router.post("/{user_id}", response_model=response.BaseResponse[None])
