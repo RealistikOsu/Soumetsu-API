@@ -7,6 +7,7 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.adapters import skins
 from soumetsu_api.constants import CustomMode
 from soumetsu_api.resources.upload_requests import UploadRequestData
 from soumetsu_api.services._common import AbstractContext
@@ -19,7 +20,6 @@ STATUSES = ("pending", "accepted", "rejected")
 type Status = Literal["pending", "accepted", "rejected"]
 
 MAX_OPEN_PER_USER = 3
-MAX_SKIN_LENGTH = 100
 MAX_REASON_LENGTH = 1000
 
 
@@ -29,6 +29,7 @@ class UploadRequestError(ServiceError):
     FORBIDDEN = "forbidden"
     TOO_MANY_OPEN = "too_many_open"
     INVALID_REQUEST = "invalid_request"
+    INVALID_SKIN = "invalid_skin"
     CANNOT_VOTE = "cannot_vote"
 
     @override
@@ -47,7 +48,11 @@ class UploadRequestError(ServiceError):
                 return status.HTTP_403_FORBIDDEN
             case UploadRequestError.TOO_MANY_OPEN:
                 return status.HTTP_429_TOO_MANY_REQUESTS
-            case UploadRequestError.INVALID_REQUEST | UploadRequestError.CANNOT_VOTE:
+            case (
+                UploadRequestError.INVALID_REQUEST
+                | UploadRequestError.INVALID_SKIN
+                | UploadRequestError.CANNOT_VOTE
+            ):
                 return status.HTTP_400_BAD_REQUEST
             case _:
                 return status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -63,7 +68,7 @@ class UploadRequestResult:
     custom_mode: int
     # None once the score is gone, for example after a wipe.
     score: ScoreWithBeatmapResult | None
-    skin: str
+    skin_url: str
     reason: str
     status: Status
     created_at: int
@@ -97,7 +102,7 @@ def _result(
         score_id=request.score_id,
         custom_mode=request.custom_mode,
         score=scores.get((request.custom_mode, request.score_id)),
-        skin=request.skin,
+        skin_url=request.skin_url,
         reason=request.reason,
         status=STATUSES[request.status],
         created_at=request.created_at,
@@ -142,12 +147,12 @@ async def create_request(
     user_id: int,
     user_privileges: int,
     score_id: int,
-    skin: str,
+    skin_url: str,
     reason: str,
 ) -> UploadRequestError.OnSuccess[None]:
-    skin = skin.strip()
+    skin_url = skin_url.strip()
     reason = reason.strip()
-    if not reason or len(reason) > MAX_REASON_LENGTH or len(skin) > MAX_SKIN_LENGTH:
+    if not reason or len(reason) > MAX_REASON_LENGTH:
         return UploadRequestError.INVALID_REQUEST
 
     if privileges.is_restricted(privileges.UserPrivileges(user_privileges)):
@@ -166,11 +171,14 @@ async def create_request(
     if await ctx.upload_requests.count_open_for_user(user_id) >= MAX_OPEN_PER_USER:
         return UploadRequestError.TOO_MANY_OPEN
 
+    if skin_url and not await skins.is_valid_skin_url(skin_url):
+        return UploadRequestError.INVALID_SKIN
+
     await ctx.upload_requests.create(
         user_id,
         score_id,
         found,
-        skin,
+        skin_url,
         reason,
         int(time.time()),
     )

@@ -118,3 +118,31 @@ class TestCreateRequest:
         )
 
         assert result == upload_requests.UploadRequestError.TOO_MANY_OPEN
+
+
+class TestSkinLink:
+    @pytest.mark.asyncio
+    async def test_rejects_a_bad_skin_link(
+        self,
+        mock_context: MockContext,
+        mock_mysql: MockMySQLAdapter,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        mock_mysql.set_result("FROM scores", SCORE_ROW)
+        mock_mysql.set_result("FROM upload_requests WHERE user_id", 0)
+
+        async def invalid(url: str) -> bool:
+            return False
+
+        monkeypatch.setattr(upload_requests.skins, "is_valid_skin_url", invalid)
+
+        result = await upload_requests.create_request(
+            mock_context,
+            PLAYER,
+            3,
+            77,
+            "https://example.com/not-a-skin",
+            "Clean play",
+        )
+
+        assert result == upload_requests.UploadRequestError.INVALID_SKIN

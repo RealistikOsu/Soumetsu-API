@@ -12,7 +12,7 @@ class UploadRequestData(BaseModel):
     country: str
     score_id: int
     custom_mode: int
-    skin: str
+    skin_url: str
     reason: str
     status: int
     created_at: int
@@ -36,7 +36,7 @@ class UploadRequestsRepository:
     ) -> list[UploadRequestData]:
         rows = await self._mysql.fetch_all(
             """SELECT r.id, r.user_id, u.username, u.country, r.score_id, r.custom_mode,
-                      r.skin, r.reason, r.status, r.created_at,
+                      r.skin_url, r.reason, r.status, r.created_at,
                       (SELECT COUNT(*) FROM upload_request_votes v
                        WHERE v.request_id = r.id AND v.vote = 1) AS up,
                       (SELECT COUNT(*) FROM upload_request_votes v
@@ -81,19 +81,19 @@ class UploadRequestsRepository:
         user_id: int,
         score_id: int,
         custom_mode: int,
-        skin: str,
+        skin_url: str,
         reason: str,
         created_at: int,
     ) -> int:
         return await self._mysql.execute(
             """INSERT INTO upload_requests
-                   (user_id, score_id, custom_mode, skin, reason, created_at)
-               VALUES (:user_id, :score_id, :custom_mode, :skin, :reason, :created_at)""",
+                   (user_id, score_id, custom_mode, skin_url, reason, created_at)
+               VALUES (:user_id, :score_id, :custom_mode, :skin_url, :reason, :created_at)""",
             {
                 "user_id": user_id,
                 "score_id": score_id,
                 "custom_mode": custom_mode,
-                "skin": skin,
+                "skin_url": skin_url,
                 "reason": reason,
                 "created_at": created_at,
             },

@@ -30,7 +30,7 @@ class UploadRequestResponse(BaseModel):
     score_id: int
     custom_mode: int
     score: ScoreWithBeatmapResponse | None
-    skin: str
+    skin_url: str
     reason: str
     status: Literal["pending", "accepted", "rejected"]
     created_at: int
@@ -47,7 +47,7 @@ class UploadRequestPageResponse(BaseModel):
 
 class CreateUploadRequest(BaseModel):
     score_id: int = Field(ge=1)
-    skin: str = ""
+    skin_url: str = ""
     reason: str
 
 
@@ -72,7 +72,7 @@ def _to_response(r: upload_requests.UploadRequestResult) -> UploadRequestRespons
         score_id=r.score_id,
         custom_mode=r.custom_mode,
         score=score_response(r.score) if r.score else None,
-        skin=r.skin,
+        skin_url=r.skin_url,
         reason=r.reason,
         status=r.status,
         created_at=r.created_at,
@@ -115,7 +115,7 @@ async def create_upload_request(
         ctx.user_id,
         ctx.privileges,
         body.score_id,
-        body.skin,
+        body.skin_url,
         body.reason,
     )
     response.unwrap(result)
