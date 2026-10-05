@@ -69,7 +69,9 @@ class ScoresRepository:
 
     # Queries for one player's scores write "play_mode + 0" (and the same for completed) on purpose: it keeps
     # MySQL from intersecting those low-cardinality indexes with userid, which scanned far more rows than
-    # walking the player's own scores and made profile lists take most of a second.
+    # walking the player's own scores and made profile lists take most of a second. Top plays order by
+    # "pp + 0" for the same reason: with a small LIMIT, ordering by plain pp let MySQL walk the pp index
+    # across every player's scores looking for this one's, which took several seconds for some profiles.
 
     async def find_by_id(
         self,
@@ -155,7 +157,7 @@ class ScoresRepository:
             AND s.play_mode + 0 = :mode
             AND s.completed + 0 = 3
             AND b.ranked = 2
-            ORDER BY s.pp DESC
+            ORDER BY s.pp + 0 DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
