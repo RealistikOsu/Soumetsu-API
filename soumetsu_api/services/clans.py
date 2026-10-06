@@ -7,7 +7,7 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api import settings
-from soumetsu_api.constants import is_valid_custom_mode
+from soumetsu_api.constants import STABLE_CUSTOM_MODES
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.clans import CLAN_PERM_MEMBER
 from soumetsu_api.resources.clans import CLAN_PERM_OWNER
@@ -475,7 +475,7 @@ async def get_clan_stats(
     if not is_valid_mode(mode):
         return ClanError.INVALID_MODE
 
-    if not is_valid_custom_mode(custom_mode):
+    if custom_mode not in STABLE_CUSTOM_MODES:
         return ClanError.INVALID_CUSTOM_MODE
 
     clan = await ctx.clans.get_by_id(clan_id)
@@ -529,7 +529,7 @@ async def get_clan_leaderboard(
     if not is_valid_mode(mode):
         return ClanError.INVALID_MODE
 
-    if not is_valid_custom_mode(custom_mode):
+    if custom_mode not in STABLE_CUSTOM_MODES:
         return ClanError.INVALID_CUSTOM_MODE
 
     if limit > 100:
@@ -613,7 +613,7 @@ async def get_clan_top_scores(
     if not is_valid_mode(mode):
         return ClanError.INVALID_MODE
 
-    if not is_valid_custom_mode(custom_mode):
+    if custom_mode not in STABLE_CUSTOM_MODES:
         return ClanError.INVALID_CUSTOM_MODE
 
     clan = await ctx.clans.get_by_id(clan_id)
@@ -654,7 +654,7 @@ async def get_clan_member_leaderboard(
     if not is_valid_mode(mode):
         return ClanError.INVALID_MODE
 
-    if not is_valid_custom_mode(custom_mode):
+    if custom_mode not in STABLE_CUSTOM_MODES:
         return ClanError.INVALID_CUSTOM_MODE
 
     clan = await ctx.clans.get_by_id(clan_id)

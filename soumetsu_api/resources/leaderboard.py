@@ -49,6 +49,8 @@ def _build_leaderboard_key(
         base_key = f"ripple:leaderboard_relax:{suffix}"
     elif custom_mode == 2:
         base_key = f"ripple:leaderboard_ap:{suffix}"
+    elif custom_mode == 3:
+        base_key = f"ripple:leaderboard_lazer:{suffix}"
     else:
         base_key = f"ripple:leaderboard:{suffix}"
 

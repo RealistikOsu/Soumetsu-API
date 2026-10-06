@@ -68,6 +68,11 @@ class UserStatsRepository:
             {"id": user_id, "username": username},
         )
 
+        await self._mysql.execute(
+            """INSERT INTO lazer_stats (id, username) VALUES (:id, :username)""",
+            {"id": user_id, "username": username},
+        )
+
     async def get_stats(
         self,
         user_id: int,

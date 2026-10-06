@@ -8,7 +8,7 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api.adapters import skins
-from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import STABLE_CUSTOM_MODES
 from soumetsu_api.resources.upload_requests import UploadRequestData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -129,7 +129,7 @@ async def list_requests(
     total = await ctx.upload_requests.count_by_status(code)
 
     scores: dict[tuple[int, int], ScoreWithBeatmapResult] = {}
-    for custom_mode in CustomMode:
+    for custom_mode in STABLE_CUSTOM_MODES:
         ids = [r.score_id for r in requests if r.custom_mode == custom_mode]
         if not ids:
             continue
@@ -160,7 +160,7 @@ async def create_request(
 
     # Score IDs are only unique per table, so the player's own scores decide which one is meant.
     found = None
-    for custom_mode in CustomMode:
+    for custom_mode in STABLE_CUSTOM_MODES:
         score = await ctx.scores.find_by_id(score_id, custom_mode)
         if score and score.player_id == user_id and score.completed >= 1:
             found = custom_mode

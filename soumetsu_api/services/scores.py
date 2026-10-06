@@ -5,6 +5,7 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.constants import CustomMode
 from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.scores import ScoreData
@@ -386,8 +387,10 @@ async def pin_score(
     score_id: int,
     custom_mode: int = 0,
 ) -> ScoreError.OnSuccess[None]:
-    # Lazer scores (negative ids) can't be pinned, as pins refer to stable score rows.
-    score = await ctx.scores.find_by_id(score_id, custom_mode) if score_id > 0 else None
+    if custom_mode == CustomMode.LAZER:
+        return ScoreError.INVALID_CUSTOM_MODE
+
+    score = await ctx.scores.find_by_id(score_id, custom_mode)
     if not score:
         return ScoreError.SCORE_NOT_FOUND
 

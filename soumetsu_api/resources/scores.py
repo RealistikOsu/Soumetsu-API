@@ -5,6 +5,7 @@ import time as time_module
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.constants import CustomMode
 from soumetsu_api.utilities import lazer
 
 SCORE_TABLES = ["scores", "scores_relax", "scores_ap"]
@@ -16,22 +17,32 @@ DIFFICULTY_COLUMNS = [
 ]
 
 
-# osu!lazer scores count towards vanilla pp, so they show with the stable ones. Their ids are negated so they
-# can't clash with a stable score's, and a negative id is how the rest of the API knows a score is lazer's.
+LAZER_SCORE_COLUMNS = """l.id, l.beatmap_md5, l.user_id AS player_id, l.total_score AS score,
+       l.max_combo, CAST(l.mods AS CHAR) AS lazer_mods,
+       CAST(l.statistics AS CHAR) AS lazer_statistics,
+       CAST(UNIX_TIMESTAMP(l.ended_at) AS SIGNED) AS submitted_at,
+       l.ruleset_id AS play_mode, l.accuracy, l.pp, l.passed"""
+
+
 def lazer_score_row_to_data(row: dict) -> dict:
     mods = row.pop("lazer_mods")
     counts = lazer.legacy_counts(row["play_mode"], row.pop("lazer_statistics"))
     return {
         **row,
         **counts,
-        "id": -row["id"],
         "full_combo": counts["count_misses"] == 0,
         "mods": lazer.legacy_mod_bits(mods),
         "playback_rate": lazer.playback_rate(mods),
-        "accuracy": row["accuracy"] * 100,
-        "completed": 3,
+        "accuracy": float(row["accuracy"]) * 100,
+        "pp": float(row["pp"]),
+        "completed": 3 if row.pop("passed") else 0,
         "playtime": 0,
     }
+
+
+def _lazer_beatmap_columns(mode: int) -> str:
+    return f"""b.beatmap_id, b.beatmapset_id, b.song_name,
+       b.{DIFFICULTY_COLUMNS[mode]} AS difficulty, b.ranked"""
 
 
 class ScoreData(BaseModel):
@@ -103,8 +114,8 @@ class ScoresRepository:
         score_id: int,
         custom_mode: int,
     ) -> ScoreData | None:
-        if score_id < 0:
-            return await self._find_lazer_by_id(-score_id)
+        if custom_mode == CustomMode.LAZER:
+            return await self._find_lazer_by_id(score_id)
 
         table = self._get_table(custom_mode)
         query = f"""
@@ -123,15 +134,10 @@ class ScoresRepository:
 
         return ScoreData(**row)
 
-    async def _find_lazer_by_id(self, lazer_id: int) -> ScoreData | None:
+    async def _find_lazer_by_id(self, score_id: int) -> ScoreData | None:
         row = await self._mysql.fetch_one(
-            """SELECT l.id, l.beatmap_md5, l.user_id AS player_id, l.total_score AS score,
-                      l.max_combo, CAST(l.mods AS CHAR) AS lazer_mods,
-                      CAST(l.statistics AS CHAR) AS lazer_statistics,
-                      CAST(UNIX_TIMESTAMP(l.ended_at) AS SIGNED) AS submitted_at, l.ruleset_id AS play_mode,
-                      l.accuracy, l.pp
-               FROM lazer_scores l WHERE l.id = :id AND l.passed = 1""",
-            {"id": lazer_id},
+            f"SELECT {LAZER_SCORE_COLUMNS} FROM lazer_scores l WHERE l.id = :id",
+            {"id": score_id},
         )
         return ScoreData(**lazer_score_row_to_data(dict(row))) if row else None
 
@@ -140,6 +146,9 @@ class ScoresRepository:
         score_ids: list[int],
         custom_mode: int,
     ) -> list[ScoreWithBeatmap]:
+        if custom_mode == CustomMode.LAZER:
+            return await self._list_lazer_with_beatmap(score_ids)
+
         table = self._get_table(custom_mode)
         placeholders = ", ".join(f":id{i}" for i in range(len(score_ids)))
         query = f"""
@@ -174,12 +183,8 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
-        if custom_mode == 0:
-            with_lazer = await self._list_vanilla_best_with_lazer(
-                player_id, mode, limit, offset
-            )
-            if with_lazer is not None:
-                return with_lazer
+        if custom_mode == CustomMode.LAZER:
+            return await self._list_lazer_best(player_id, mode, limit, offset)
 
         table = self._get_table(custom_mode)
         diff_col = DIFFICULTY_COLUMNS[mode]
@@ -208,74 +213,131 @@ class ScoresRepository:
         )
         return [ScoreWithBeatmap(**row) for row in rows]
 
-    # The same set of plays the pp is worked out from (The-Pentagon, lazer and performance-service): each
-    # beatmap's best play across stable and lazer. None when the lazer tables haven't been migrated.
-    async def _list_vanilla_best_with_lazer(
-        self, player_id: int, mode: int, limit: int, offset: int
-    ) -> list[ScoreWithBeatmap] | None:
-        try:
-            picked = await self._mysql.fetch_all(
-                """SELECT best.source, best.id FROM (
-                       SELECT plays.source, plays.id, plays.pp,
-                              ROW_NUMBER() OVER (PARTITION BY plays.beatmap_md5 ORDER BY plays.pp DESC) AS rn
-                       FROM (
-                           SELECT 'stable' AS source, s.id, s.beatmap_md5, s.pp FROM scores s
-                           INNER JOIN beatmaps b ON b.beatmap_md5 = s.beatmap_md5
-                           WHERE s.userid = :player_id AND s.play_mode + 0 = :mode
-                             AND s.completed + 0 = 3 AND b.ranked IN (2, 3)
-                           UNION ALL
-                           SELECT 'lazer', l.id, l.beatmap_md5, l.pp FROM lazer_scores l
-                           INNER JOIN beatmaps b ON b.beatmap_md5 = l.beatmap_md5
-                           WHERE l.user_id = :player_id AND l.ruleset_id = :mode
-                             AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)
-                       ) plays
-                   ) best
-                   WHERE best.rn = 1
-                   ORDER BY best.pp DESC
-                   LIMIT :limit OFFSET :offset""",
-                {
-                    "player_id": player_id,
-                    "mode": mode,
-                    "limit": limit,
-                    "offset": offset,
-                },
-            )
-        except Exception as error:
-            if "doesn't exist" in str(error):
-                return None
-            raise
-
-        stable_ids = [row["id"] for row in picked if row["source"] == "stable"]
-        lazer_ids = [row["id"] for row in picked if row["source"] == "lazer"]
-        by_id = (
-            {s.id: s for s in await self.list_with_beatmap(stable_ids, 0)}
-            if stable_ids
-            else {}
+    async def _list_lazer_with_beatmap(
+        self, score_ids: list[int]
+    ) -> list[ScoreWithBeatmap]:
+        placeholders = ", ".join(f":id{i}" for i in range(len(score_ids)))
+        rows = await self._mysql.fetch_all(
+            f"""SELECT {LAZER_SCORE_COLUMNS},
+                       b.beatmap_id, b.beatmapset_id, b.song_name, b.ranked,
+                       CASE l.ruleset_id
+                           WHEN 0 THEN b.difficulty_std
+                           WHEN 1 THEN b.difficulty_taiko
+                           WHEN 2 THEN b.difficulty_ctb
+                           ELSE b.difficulty_mania
+                       END AS difficulty
+                FROM lazer_scores l
+                INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
+                WHERE l.id IN ({placeholders})""",
+            {f"id{i}": score_id for i, score_id in enumerate(score_ids)},
         )
+        return [ScoreWithBeatmap(**lazer_score_row_to_data(dict(r))) for r in rows]
 
-        if lazer_ids:
-            diff_col = DIFFICULTY_COLUMNS[mode]
-            placeholders = ", ".join(f":id{i}" for i in range(len(lazer_ids)))
-            rows = await self._mysql.fetch_all(
-                f"""SELECT l.id, l.beatmap_md5, l.user_id AS player_id, l.total_score AS score,
-                           l.max_combo, CAST(l.mods AS CHAR) AS lazer_mods,
-                           CAST(l.statistics AS CHAR) AS lazer_statistics,
-                           CAST(UNIX_TIMESTAMP(l.ended_at) AS SIGNED) AS submitted_at, l.ruleset_id AS play_mode,
-                           l.accuracy, l.pp, b.beatmap_id, b.beatmapset_id, b.song_name,
-                           b.{diff_col} AS difficulty, b.ranked
+    async def _list_lazer_best(
+        self, player_id: int, mode: int, limit: int, offset: int
+    ) -> list[ScoreWithBeatmap]:
+        rows = await self._mysql.fetch_all(
+            f"""SELECT * FROM (
+                    SELECT {LAZER_SCORE_COLUMNS}, {_lazer_beatmap_columns(mode)},
+                           ROW_NUMBER() OVER (
+                               PARTITION BY l.beatmap_md5 ORDER BY l.pp DESC, l.id DESC
+                           ) AS rn
                     FROM lazer_scores l
-                    INNER JOIN beatmaps b ON b.beatmap_md5 = l.beatmap_md5
-                    WHERE l.id IN ({placeholders})""",
-                {f"id{i}": lazer_id for i, lazer_id in enumerate(lazer_ids)},
-            )
-            for row in rows:
-                score = ScoreWithBeatmap(**lazer_score_row_to_data(dict(row)))
-                by_id[score.id] = score
+                    INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
+                    WHERE l.user_id = :player_id AND l.ruleset_id = :mode
+                      AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)
+                ) best
+                WHERE best.rn = 1
+                ORDER BY best.pp DESC
+                LIMIT :limit OFFSET :offset""",
+            {"player_id": player_id, "mode": mode, "limit": limit, "offset": offset},
+        )
+        return [ScoreWithBeatmap(**lazer_score_row_to_data(dict(r))) for r in rows]
 
-        return [
-            by_id[-row["id"] if row["source"] == "lazer" else row["id"]]
-            for row in picked
-        ]
+    async def _list_lazer_recent(
+        self,
+        player_id: int,
+        mode: int,
+        limit: int,
+        offset: int,
+        exclude_failed: bool,
+    ) -> list[ScoreWithBeatmap]:
+        passed_only = "AND l.passed = 1" if exclude_failed else ""
+        rows = await self._mysql.fetch_all(
+            f"""SELECT {LAZER_SCORE_COLUMNS}, {_lazer_beatmap_columns(mode)}
+                FROM lazer_scores l
+                INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
+                WHERE l.user_id = :player_id AND l.ruleset_id = :mode
+                {passed_only}
+                ORDER BY l.id DESC
+                LIMIT :limit OFFSET :offset""",
+            {"player_id": player_id, "mode": mode, "limit": limit, "offset": offset},
+        )
+        return [ScoreWithBeatmap(**lazer_score_row_to_data(dict(r))) for r in rows]
+
+    async def _list_lazer_top_plays(
+        self, mode: int, limit: int, offset: int
+    ) -> list[ScoreTopPlay]:
+        rows = await self._mysql.fetch_all(
+            f"""SELECT * FROM (
+                    SELECT {LAZER_SCORE_COLUMNS}, {_lazer_beatmap_columns(mode)},
+                           u.username,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY l.user_id, l.beatmap_md5
+                               ORDER BY l.pp DESC, l.id DESC
+                           ) AS rn
+                    FROM lazer_scores l
+                    INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
+                    INNER JOIN users u ON l.user_id = u.id
+                    WHERE l.ruleset_id = :mode AND l.passed = 1 AND l.pp > 0
+                      AND b.ranked IN (2, 3) AND u.privileges & 1 > 0
+                ) best
+                WHERE best.rn = 1
+                ORDER BY best.pp DESC
+                LIMIT :limit OFFSET :offset""",
+            {"mode": mode, "limit": limit, "offset": offset},
+        )
+        return [ScoreTopPlay(**lazer_score_row_to_data(dict(r))) for r in rows]
+
+    async def _list_lazer_beatmap_scores(
+        self, beatmap_md5: str, mode: int, limit: int, offset: int
+    ) -> list[ScoreWithPlayer]:
+        rows = await self._mysql.fetch_all(
+            f"""SELECT * FROM (
+                    SELECT {LAZER_SCORE_COLUMNS},
+                           u.id AS player_db_id, u.username, u.country,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY l.user_id ORDER BY l.pp DESC, l.id DESC
+                           ) AS rn
+                    FROM lazer_scores l
+                    INNER JOIN users u ON l.user_id = u.id
+                    WHERE l.beatmap_md5 = :beatmap_md5 AND l.ruleset_id = :mode
+                      AND l.passed = 1 AND u.privileges & 1 > 0
+                ) best
+                WHERE best.rn = 1
+                ORDER BY best.pp DESC
+                LIMIT :limit OFFSET :offset""",
+            {
+                "beatmap_md5": beatmap_md5,
+                "mode": mode,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        scores = []
+        for row in rows:
+            data = lazer_score_row_to_data(dict(row))
+            scores.append(
+                ScoreWithPlayer(
+                    **data,
+                    player=ScorePlayer(
+                        player_id=data["player_db_id"],
+                        username=data["username"],
+                        country=data["country"],
+                    ),
+                )
+            )
+        return scores
 
     async def list_player_recent(
         self,
@@ -286,6 +348,11 @@ class ScoresRepository:
         offset: int = 0,
         exclude_failed: bool = False,
     ) -> list[ScoreWithBeatmap]:
+        if custom_mode == CustomMode.LAZER:
+            return await self._list_lazer_recent(
+                player_id, mode, limit, offset, exclude_failed
+            )
+
         table = self._get_table(custom_mode)
         # IDs follow submission order, and sorting by them walks the index instead of sorting every one of
         # the player's scores by time.
@@ -328,6 +395,9 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
+        if custom_mode == CustomMode.LAZER:
+            return []
+
         table = self._get_table(custom_mode)
         diff_col = [
             "difficulty_std",
@@ -374,6 +444,9 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithBeatmap]:
+        if custom_mode == CustomMode.LAZER:
+            return []
+
         table = self._get_table(custom_mode)
         diff_col = [
             "difficulty_std",
@@ -438,6 +511,9 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreTopPlay]:
+        if custom_mode == CustomMode.LAZER:
+            return await self._list_lazer_top_plays(mode, limit, offset)
+
         table = self._get_table(custom_mode)
         diff_col = [
             "difficulty_std",
@@ -518,7 +594,16 @@ class ScoresRepository:
 
         query = " UNION ALL ".join(mode_queries) + " ORDER BY pp DESC"
         rows = await self._mysql.fetch_all(query, {})
-        return [ScoreTopPlayWithMode(**row) for row in rows]
+        plays = [ScoreTopPlayWithMode(**row) for row in rows]
+
+        for mode in range(4):
+            lazer_plays = await self._list_lazer_top_plays(mode, 1, 0)
+            plays.extend(
+                ScoreTopPlayWithMode(**p.model_dump(), custom_mode=CustomMode.LAZER)
+                for p in lazer_plays
+            )
+
+        return sorted(plays, key=lambda p: p.pp, reverse=True)
 
     async def list_beatmap_scores(
         self,
@@ -528,6 +613,11 @@ class ScoresRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[ScoreWithPlayer]:
+        if custom_mode == CustomMode.LAZER:
+            return await self._list_lazer_beatmap_scores(
+                beatmap_md5, mode, limit, offset
+            )
+
         table = self._get_table(custom_mode)
 
         query = f"""

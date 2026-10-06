@@ -208,7 +208,7 @@ class UserRepository:
             },
         )
 
-        for table in ("users_stats", "rx_stats", "ap_stats"):
+        for table in ("users_stats", "rx_stats", "ap_stats", "lazer_stats"):
             await self._mysql.execute(
                 f"UPDATE {table} SET username = :username WHERE id = :id",
                 {"username": new_username, "id": user_id},
