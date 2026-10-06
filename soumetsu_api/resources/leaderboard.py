@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.adapters.redis import RedisClient
+from soumetsu_api.constants import CustomMode
 from soumetsu_api.constants import get_mode_suffix
 from soumetsu_api.constants import get_stats_table
 
@@ -38,6 +39,16 @@ class FirstPlaceEntry(BaseModel):
     mode: int
 
 
+LEADERBOARD_KEY_PREFIXES = {
+    CustomMode.VANILLA: "ripple:leaderboard",
+    CustomMode.RELAX: "ripple:leaderboard_relax",
+    CustomMode.AUTOPILOT: "ripple:leaderboard_ap",
+    CustomMode.LAZER: "ripple:leaderboard_lazer",
+    CustomMode.LAZER_RELAX: "ripple:leaderboard_lazer_relax",
+    CustomMode.LAZER_AUTOPILOT: "ripple:leaderboard_lazer_ap",
+}
+
+
 def _build_leaderboard_key(
     custom_mode: int,
     mode: int,
@@ -45,14 +56,7 @@ def _build_leaderboard_key(
 ) -> str:
     suffix = get_mode_suffix(mode)
 
-    if custom_mode == 1:
-        base_key = f"ripple:leaderboard_relax:{suffix}"
-    elif custom_mode == 2:
-        base_key = f"ripple:leaderboard_ap:{suffix}"
-    elif custom_mode == 3:
-        base_key = f"ripple:leaderboard_lazer:{suffix}"
-    else:
-        base_key = f"ripple:leaderboard:{suffix}"
+    base_key = f"{LEADERBOARD_KEY_PREFIXES[custom_mode]}:{suffix}"
 
     if country:
         return f"{base_key}:{country.lower()}"

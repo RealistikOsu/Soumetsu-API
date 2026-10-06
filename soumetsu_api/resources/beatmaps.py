@@ -5,7 +5,7 @@ import time as time_module
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
-from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import LAZER_VARIANTS
 
 # Requests count against the limits for a rolling 24 hours, like the old API.
 _DAY = 86400
@@ -223,20 +223,27 @@ class BeatmapsRepository:
         limit: int = 5,
         offset: int = 0,
     ) -> list[MostPlayedBeatmapData]:
-        if custom_mode == CustomMode.LAZER:
+        if custom_mode in LAZER_VARIANTS:
             rows = await self._mysql.fetch_all(
                 """SELECT b.beatmap_id, b.beatmapset_id, b.song_name, t.playcount
                    FROM (
                        SELECT beatmap_md5, COUNT(*) AS playcount
                        FROM lazer_scores
                        WHERE user_id = :user_id AND ruleset_id = :mode
+                         AND variant = :variant
                        GROUP BY beatmap_md5
                        ORDER BY playcount DESC
                        LIMIT :limit OFFSET :offset
                    ) t
                    INNER JOIN beatmaps b ON b.beatmap_md5 = t.beatmap_md5
                    ORDER BY t.playcount DESC""",
-                {"user_id": user_id, "mode": mode, "limit": limit, "offset": offset},
+                {
+                    "user_id": user_id,
+                    "mode": mode,
+                    "variant": LAZER_VARIANTS[custom_mode],
+                    "limit": limit,
+                    "offset": offset,
+                },
             )
             return [MostPlayedBeatmapData(**row) for row in rows]
 

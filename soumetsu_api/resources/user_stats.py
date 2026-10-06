@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.constants import STATS_TABLES
 from soumetsu_api.constants import get_mode_suffix
 from soumetsu_api.constants import get_stats_table
 
@@ -53,25 +54,11 @@ class UserStatsRepository:
         return get_mode_suffix(mode)
 
     async def initialise_all(self, user_id: int, username: str) -> None:
-        await self._mysql.execute(
-            """INSERT INTO users_stats (id, username) VALUES (:id, :username)""",
-            {"id": user_id, "username": username},
-        )
-
-        await self._mysql.execute(
-            """INSERT INTO rx_stats (id, username) VALUES (:id, :username)""",
-            {"id": user_id, "username": username},
-        )
-
-        await self._mysql.execute(
-            """INSERT INTO ap_stats (id, username) VALUES (:id, :username)""",
-            {"id": user_id, "username": username},
-        )
-
-        await self._mysql.execute(
-            """INSERT INTO lazer_stats (id, username) VALUES (:id, :username)""",
-            {"id": user_id, "username": username},
-        )
+        for table in STATS_TABLES.values():
+            await self._mysql.execute(
+                f"INSERT INTO {table} (id, username) VALUES (:id, :username)",
+                {"id": user_id, "username": username},
+            )
 
     async def get_stats(
         self,

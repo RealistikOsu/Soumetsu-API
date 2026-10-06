@@ -15,16 +15,25 @@ class GameMode(IntEnum):
 
 
 class CustomMode(IntEnum):
-    """Custom game modes (vanilla, relax, autopilot, lazer)."""
+    """Custom game modes (vanilla, relax, autopilot and their lazer counterparts)."""
 
     VANILLA = 0
     RELAX = 1
     AUTOPILOT = 2
     LAZER = 3
+    LAZER_RELAX = 4
+    LAZER_AUTOPILOT = 5
 
 
 # The modes backed by the stable score tables
 STABLE_CUSTOM_MODES = (CustomMode.VANILLA, CustomMode.RELAX, CustomMode.AUTOPILOT)
+
+# The lazer_scores.variant each lazer mode reads
+LAZER_VARIANTS: dict[int, int] = {
+    CustomMode.LAZER: 0,
+    CustomMode.LAZER_RELAX: 1,
+    CustomMode.LAZER_AUTOPILOT: 2,
+}
 
 # Database column suffixes for mode-specific stats
 MODE_SUFFIXES: dict[int, str] = {
@@ -40,6 +49,8 @@ STATS_TABLES: dict[int, str] = {
     CustomMode.RELAX: "rx_stats",
     CustomMode.AUTOPILOT: "ap_stats",
     CustomMode.LAZER: "lazer_stats",
+    CustomMode.LAZER_RELAX: "lazer_rx_stats",
+    CustomMode.LAZER_AUTOPILOT: "lazer_ap_stats",
 }
 
 # Level calculation constants
@@ -58,8 +69,8 @@ def is_valid_mode(mode: int) -> bool:
 
 
 def is_valid_custom_mode(custom_mode: int) -> bool:
-    """Check if custom mode is valid (0-3)."""
-    return 0 <= custom_mode <= 3
+    """Check if custom mode is valid (0-5)."""
+    return 0 <= custom_mode <= 5
 
 
 def get_mode_suffix(mode: int) -> str:

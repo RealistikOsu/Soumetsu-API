@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
+from soumetsu_api.constants import STATS_TABLES
 from soumetsu_api.utilities.validation import safe_username
 
 
@@ -208,7 +209,7 @@ class UserRepository:
             },
         )
 
-        for table in ("users_stats", "rx_stats", "ap_stats", "lazer_stats"):
+        for table in STATS_TABLES.values():
             await self._mysql.execute(
                 f"UPDATE {table} SET username = :username WHERE id = :id",
                 {"username": new_username, "id": user_id},

@@ -5,7 +5,7 @@ from typing import override
 
 from fastapi import status
 
-from soumetsu_api.constants import CustomMode
+from soumetsu_api.constants import LAZER_VARIANTS
 from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.scores import ScoreData
@@ -387,7 +387,7 @@ async def pin_score(
     score_id: int,
     custom_mode: int = 0,
 ) -> ScoreError.OnSuccess[None]:
-    if custom_mode == CustomMode.LAZER:
+    if custom_mode in LAZER_VARIANTS:
         return ScoreError.INVALID_CUSTOM_MODE
 
     score = await ctx.scores.find_by_id(score_id, custom_mode)
