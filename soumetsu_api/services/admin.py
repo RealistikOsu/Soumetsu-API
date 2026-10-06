@@ -4,6 +4,7 @@ from typing import override
 
 from fastapi import status
 
+from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import privileges
@@ -183,7 +184,7 @@ async def wipe_user_stats(
     if mode is not None and (mode < 0 or mode > 3):
         return AdminError.INVALID_MODE
 
-    if custom_mode < 0 or custom_mode > 2:
+    if not is_valid_custom_mode(custom_mode):
         return AdminError.INVALID_CUSTOM_MODE
 
     user = await ctx.users.find_by_id(user_id)
@@ -193,7 +194,14 @@ async def wipe_user_stats(
     await ctx.admin.wipe_user_stats(user_id, mode, custom_mode)
 
     mode_name = ["std", "taiko", "ctb", "mania"][mode] if mode is not None else "all"
-    custom_mode_name = ["vanilla", "relax", "autopilot"][custom_mode]
+    custom_mode_name = [
+        "vanilla",
+        "relax",
+        "autopilot",
+        "lazer",
+        "lazer relax",
+        "lazer autopilot",
+    ][custom_mode]
 
     await ctx.admin.create_rap_log(
         admin_id,
