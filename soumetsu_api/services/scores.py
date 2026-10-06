@@ -386,7 +386,8 @@ async def pin_score(
     score_id: int,
     custom_mode: int = 0,
 ) -> ScoreError.OnSuccess[None]:
-    score = await ctx.scores.find_by_id(score_id, custom_mode)
+    # Lazer scores (negative ids) can't be pinned, as pins refer to stable score rows.
+    score = await ctx.scores.find_by_id(score_id, custom_mode) if score_id > 0 else None
     if not score:
         return ScoreError.SCORE_NOT_FOUND
 

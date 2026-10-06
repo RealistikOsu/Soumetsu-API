@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from fastapi import Query
 from fastapi import Response
 from pydantic import BaseModel
+from pydantic import computed_field
 
 from soumetsu_api.api.v2 import response
 from soumetsu_api.api.v2.context import OptionalAuth
@@ -38,6 +39,12 @@ class ScoreResponse(BaseModel):
     accuracy: float
     pp: float
     playtime: int
+
+    # osu!lazer scores count towards vanilla pp and are listed with stable ones under a negative id.
+    @computed_field
+    @property
+    def lazer(self) -> bool:
+        return self.id < 0
 
 
 class BeatmapInfo(BaseModel):
