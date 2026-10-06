@@ -257,7 +257,8 @@ class ScoresRepository:
                     FROM lazer_scores l
                     INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
                     WHERE l.user_id = :player_id AND l.ruleset_id = :mode
-                      AND l.variant = :variant AND l.passed = 1 AND l.pp > 0 AND b.ranked IN (2, 3)
+                      AND l.variant = :variant AND l.ranked_mods = 1 AND l.passed = 1
+                      AND l.pp > 0 AND b.ranked IN (2, 3)
                 ) best
                 WHERE best.rn = 1
                 ORDER BY best.pp DESC
@@ -316,7 +317,7 @@ class ScoresRepository:
                     INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
                     INNER JOIN users u ON l.user_id = u.id
                     WHERE l.ruleset_id = :mode AND l.variant = :variant
-                      AND l.passed = 1 AND l.pp > 0
+                      AND l.ranked_mods = 1 AND l.passed = 1 AND l.pp > 0
                       AND b.ranked IN (2, 3) AND u.privileges & 1 > 0
                 ) best
                 WHERE best.rn = 1
@@ -339,7 +340,8 @@ class ScoresRepository:
                     FROM lazer_scores l
                     INNER JOIN users u ON l.user_id = u.id
                     WHERE l.beatmap_md5 = :beatmap_md5 AND l.ruleset_id = :mode
-                      AND l.variant = :variant AND l.passed = 1 AND u.privileges & 1 > 0
+                      AND l.variant = :variant AND l.ranked_mods = 1 AND l.passed = 1
+                      AND u.privileges & 1 > 0
                 ) best
                 WHERE best.rn = 1
                 ORDER BY best.pp DESC
