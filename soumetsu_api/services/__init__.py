@@ -8,6 +8,7 @@ from . import comments
 from . import friends
 from . import health
 from . import leaderboard
+from . import ranked_play
 from . import scores
 from . import stats
 from . import two_factor

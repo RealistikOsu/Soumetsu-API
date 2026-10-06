@@ -19,6 +19,7 @@ from . import friends
 from . import health
 from . import leaderboard
 from . import peppy
+from . import ranked_play
 from . import scores
 from . import stats
 from . import team
@@ -51,6 +52,7 @@ def create_router() -> APIRouter:
     router.include_router(health.router)
     router.include_router(leaderboard.router)
     router.include_router(peppy.router)
+    router.include_router(ranked_play.router)
     router.include_router(scores.router)
     router.include_router(stats.router)
     router.include_router(team.router)

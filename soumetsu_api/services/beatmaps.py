@@ -191,7 +191,7 @@ class ProfileBeatmapSet:
     difficulties: list[ProfileDifficulty]
 
 
-def _split_song(song_name: str) -> tuple[str, str, str]:
+def split_song(song_name: str) -> tuple[str, str, str]:
     # song_name is one difficulty's "Artist - Title [Difficulty]".
     song, version = song_name, ""
     if song_name.endswith("]") and " [" in song_name:
@@ -234,7 +234,7 @@ async def list_user_sets(
         )
         if not mine:
             continue
-        artist, title, _ = _split_song(mine[0].song_name)
+        artist, title, _ = split_song(mine[0].song_name)
         result.append(
             ProfileBeatmapSet(
                 beatmapset_id=s.beatmapset_id,
@@ -247,7 +247,7 @@ async def list_user_sets(
                 difficulties=[
                     ProfileDifficulty(
                         beatmap_id=d.beatmap_id,
-                        version=_split_song(d.song_name)[2],
+                        version=split_song(d.song_name)[2],
                         mode=d.mode,
                         stars=d.stars,
                     )

@@ -11,6 +11,7 @@ from . import discord_oauth
 from . import example
 from . import friends
 from . import leaderboard
+from . import ranked_play
 from . import scores
 from . import sessions
 from . import stats
@@ -33,6 +34,7 @@ from .example import ExampleRepository
 from .example import ExampleResource
 from .friends import FriendsRepository
 from .leaderboard import LeaderboardRepository
+from .ranked_play import RankedPlayRepository
 from .scores import ScoresRepository
 from .sessions import SessionData
 from .sessions import SessionRepository
