@@ -27,18 +27,21 @@ class MatchPlayerData(MatchUserData):
     match_id: int
 
 
-class MatchRoundData(BaseModel):
-    match_id: int
-    round: int
-    ruleset_id: int
-    started_at: datetime
-    ended_at: datetime | None
+class RoundBeatmapData(BaseModel):
     beatmap_id: int
+    ruleset_id: int
     beatmapset_id: int | None
     song_name: str | None
     ranked: int | None
     stars: float | None
     creator: str | None
+
+
+class MatchRoundData(RoundBeatmapData):
+    match_id: int
+    round: int
+    started_at: datetime
+    ended_at: datetime | None
 
 
 class MatchScoreData(BaseModel):
@@ -58,7 +61,16 @@ class MatchEventData(BaseModel):
     created_at: datetime
 
 
-def _placeholders(ids: list[int]) -> tuple[str, dict[str, int]]:
+def stars_for(ruleset: str) -> str:
+    return f"""CASE {ruleset}
+                           WHEN 1 THEN b.difficulty_taiko
+                           WHEN 2 THEN b.difficulty_ctb
+                           WHEN 3 THEN b.difficulty_mania
+                           ELSE b.difficulty_std
+                       END"""
+
+
+def id_placeholders(ids: list[int]) -> tuple[str, dict[str, int]]:
     names = ", ".join(f":id_{i}" for i in range(len(ids)))
     return names, {f"id_{i}": value for i, value in enumerate(ids)}
 
@@ -117,7 +129,7 @@ class RankedPlayRepository:
     async def list_players(self, match_ids: list[int]) -> list[MatchPlayerData]:
         if not match_ids:
             return []
-        placeholders, params = _placeholders(match_ids)
+        placeholders, params = id_placeholders(match_ids)
         rows = await self._mysql.fetch_all(
             f"""SELECT p.match_id, u.id, u.username, u.country, u.privileges
                 FROM (
@@ -142,7 +154,7 @@ class RankedPlayRepository:
     async def list_users(self, user_ids: list[int]) -> list[MatchUserData]:
         if not user_ids:
             return []
-        placeholders, params = _placeholders(user_ids)
+        placeholders, params = id_placeholders(user_ids)
         rows = await self._mysql.fetch_all(
             f"""SELECT id, username, country, privileges
                 FROM users WHERE deleted = 0 AND id IN ({placeholders})""",
@@ -153,16 +165,11 @@ class RankedPlayRepository:
     async def list_rounds(self, match_ids: list[int]) -> list[MatchRoundData]:
         if not match_ids:
             return []
-        placeholders, params = _placeholders(match_ids)
+        placeholders, params = id_placeholders(match_ids)
         rows = await self._mysql.fetch_all(
             f"""SELECT r.match_id, r.round, r.ruleset_id, r.started_at, r.ended_at,
                        r.beatmap_id, b.beatmapset_id, b.song_name, b.ranked,
-                       CASE r.ruleset_id
-                           WHEN 1 THEN b.difficulty_taiko
-                           WHEN 2 THEN b.difficulty_ctb
-                           WHEN 3 THEN b.difficulty_mania
-                           ELSE b.difficulty_std
-                       END AS stars,
+                       {stars_for("r.ruleset_id")} AS stars,
                        mu.username AS creator
                 FROM lazer_ranked_play_match_rounds r
                 LEFT JOIN beatmaps b ON b.beatmap_id = r.beatmap_id AND b.ranked != -1

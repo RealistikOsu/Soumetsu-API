@@ -13,6 +13,7 @@ from soumetsu_api.resources.ranked_play import MatchPlayerData
 from soumetsu_api.resources.ranked_play import MatchRoundData
 from soumetsu_api.resources.ranked_play import MatchScoreData
 from soumetsu_api.resources.ranked_play import MatchUserData
+from soumetsu_api.resources.ranked_play import RoundBeatmapData
 from soumetsu_api.resources.sessions import SessionData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
@@ -166,7 +167,7 @@ def user_ref(user: MatchUserData) -> UserRef:
     return UserRef(id=user.id, username=user.username, country=user.country)
 
 
-def beatmap_ref(row: MatchRoundData) -> BeatmapRef:
+def beatmap_ref(row: RoundBeatmapData) -> BeatmapRef:
     artist, title, version = split_song(row.song_name or "")
     stars = row.stars if row.stars and row.stars > 0 else None
     return BeatmapRef(
