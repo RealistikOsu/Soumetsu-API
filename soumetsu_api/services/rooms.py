@@ -169,8 +169,8 @@ def month_bounds(year: int, month: int) -> tuple[date, date]:
 Window = tuple[datetime, datetime]
 
 
-# The challenges are scheduled by hand, so one always lasts 24 hours from its start, which is the beginning of
-# its date unless the schedule says otherwise.
+# The challenges are scheduled by hand, so one always lasts 24 hours from its start. A day with no schedule row
+# (a room kept from before the schedule existed) counts as starting at the beginning of its date.
 def window_of(day: date, starts_at: datetime | None = None) -> Window:
     start = (
         starts_at.replace(tzinfo=UTC)

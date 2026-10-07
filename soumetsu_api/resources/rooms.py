@@ -95,7 +95,7 @@ class PercentileData(BaseModel):
 
 class ScheduleData(BaseModel):
     challenge_date: date
-    # UTC, naive as MySQL returns them. Without it the challenge starts at the beginning of its date.
+    # UTC, naive as MySQL returns them.
     starts_at: datetime | None = None
 
 
