@@ -5,6 +5,7 @@ from . import auth
 from . import beatmaps
 from . import clans
 from . import comments
+from . import daily_stats
 from . import friends
 from . import health
 from . import leaderboard

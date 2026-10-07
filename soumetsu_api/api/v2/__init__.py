@@ -15,6 +15,7 @@ from . import badges
 from . import beatmaps
 from . import clans
 from . import comments
+from . import daily_stats
 from . import friends
 from . import health
 from . import leaderboard
@@ -50,6 +51,7 @@ def create_router() -> APIRouter:
     router.include_router(beatmaps.router)
     router.include_router(clans.router)
     router.include_router(comments.router)
+    router.include_router(daily_stats.router)
     router.include_router(friends.router)
     router.include_router(health.router)
     router.include_router(leaderboard.router)

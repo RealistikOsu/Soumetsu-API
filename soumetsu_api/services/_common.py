@@ -23,6 +23,7 @@ from soumetsu_api.resources import BeatmapsRepository
 from soumetsu_api.resources import ClanFilesRepository
 from soumetsu_api.resources import ClansRepository
 from soumetsu_api.resources import CommentsRepository
+from soumetsu_api.resources import DailyStatsRepository
 from soumetsu_api.resources import DiscordOAuthRepository
 from soumetsu_api.resources import ExampleRepository
 from soumetsu_api.resources import FriendsRepository
@@ -155,6 +156,10 @@ class AbstractContext(ABC):
     @property
     def multiplayer(self) -> MultiplayerRepository:
         return MultiplayerRepository(self._mysql)
+
+    @property
+    def daily_stats(self) -> DailyStatsRepository:
+        return DailyStatsRepository(self._mysql)
 
     @property
     def ranked_play(self) -> RankedPlayRepository:
