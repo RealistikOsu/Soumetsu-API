@@ -12,6 +12,7 @@ from . import example
 from . import friends
 from . import leaderboard
 from . import ranked_play
+from . import rooms
 from . import scores
 from . import sessions
 from . import stats
@@ -35,6 +36,7 @@ from .example import ExampleResource
 from .friends import FriendsRepository
 from .leaderboard import LeaderboardRepository
 from .ranked_play import RankedPlayRepository
+from .rooms import RoomsRepository
 from .scores import ScoresRepository
 from .sessions import SessionData
 from .sessions import SessionRepository
