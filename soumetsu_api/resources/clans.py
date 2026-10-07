@@ -123,8 +123,8 @@ class ClansRepository:
         tag: str,
     ) -> int:
         return await self._mysql.execute(
-            """INSERT INTO clans (name, description, tag)
-               VALUES (:name, :description, :tag)""",
+            """INSERT INTO clans (name, description, icon, tag)
+               VALUES (:name, :description, '', :tag)""",
             {"name": name, "description": description, "tag": tag},
         )
 
