@@ -300,6 +300,25 @@ class RoomsRepository:
         )
         return count or 0
 
+    async def list_stable_percentiles(
+        self,
+        md5: str,
+        mode: int,
+        start: int,
+        end: int,
+    ) -> list[PercentileData]:
+        rows = await self._mysql.fetch_all(
+            f"""SELECT r.n, r.rn, r.best
+                FROM (SELECT g.best,
+                             ROW_NUMBER() OVER (ORDER BY g.best DESC, g.userid) AS rn,
+                             COUNT(*) OVER () AS n
+                      FROM (SELECT s.userid, MAX(s.score) AS best {_STABLE_PASSED}
+                            GROUP BY s.userid) g) r
+                WHERE r.rn IN (CEIL(r.n / 10), CEIL(r.n / 2))""",
+            {"md5": md5, "mode": mode, "start": start, "end": end},
+        )
+        return [PercentileData(**row) for row in rows]
+
     async def list_stable_ladder(
         self,
         md5: str,

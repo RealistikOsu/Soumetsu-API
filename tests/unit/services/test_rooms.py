@@ -229,6 +229,8 @@ def test_daily_response_serialises_date() -> None:
         required_mods=[],
         participants=0,
         stable_participants=3,
+        stable_top_10_score=900000,
+        stable_top_50_score=400000,
         top_10_score=None,
         top_50_score=None,
         room_id=None,
@@ -241,6 +243,14 @@ def test_daily_response_serialises_date() -> None:
     assert dumped["date"] == "2026-10-01"
     assert dumped["top_10_score"] is None
     assert dumped["stable_participants"] == 3
+    assert dumped["stable_top_10_score"] == 900000
+    assert dumped["stable_top_50_score"] == 400000
+
+
+def test_stable_percentiles_use_the_same_cut_positions() -> None:
+    rows = [PercentileData(n=25, rn=3, best=900), PercentileData(n=25, rn=13, best=500)]
+
+    assert rooms.pick_percentiles(rows) == (25, 900, 500)
 
 
 @pytest.mark.asyncio

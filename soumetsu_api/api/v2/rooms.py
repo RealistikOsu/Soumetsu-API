@@ -41,6 +41,8 @@ class DailyChallengeResponse(BaseModel):
     required_mods: list[ModResponse]
     participants: int
     stable_participants: int
+    stable_top_10_score: int | None
+    stable_top_50_score: int | None
     top_10_score: int | None
     top_50_score: int | None
     room_id: int | None

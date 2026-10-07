@@ -77,6 +77,8 @@ class DailyChallengeResult:
     required_mods: list[Mod]
     participants: int
     stable_participants: int
+    stable_top_10_score: int | None
+    stable_top_50_score: int | None
     top_10_score: int | None
     top_50_score: int | None
     room_id: int | None
@@ -312,17 +314,19 @@ async def _scores(
     return ScoresResult(total=total, scores=shape_scores(ladder, bests, offset))
 
 
-async def _stable_participants(
+async def _stable_summary(
     ctx: AbstractContext,
     day: date,
     beatmap_id: int,
     ruleset: int,
-) -> int:
+) -> tuple[int, int | None, int | None]:
     md5 = await ctx.rooms.find_beatmap_md5(beatmap_id)
     if not md5:
-        return 0
+        return 0, None, None
     start, end = day_bounds(day)
-    return await ctx.rooms.count_stable_players(md5, ruleset, start, end)
+    return pick_percentiles(
+        await ctx.rooms.list_stable_percentiles(md5, ruleset, start, end)
+    )
 
 
 async def _stable_scores(
@@ -374,15 +378,18 @@ async def get_daily_challenge(
         participants, top_10, top_50 = pick_percentiles(
             await ctx.rooms.list_percentiles(room.id, item.item_id),
         )
+        stable_players, stable_10, stable_50 = await _stable_summary(
+            ctx, day, item.beatmap_id, item.ruleset_id
+        )
         return DailyChallengeResult(
             date=day,
             beatmap=beatmap_ref(item),
             ruleset=item.ruleset_id,
             required_mods=parse_mods(item.required_mods),
             participants=participants,
-            stable_participants=await _stable_participants(
-                ctx, day, item.beatmap_id, item.ruleset_id
-            ),
+            stable_participants=stable_players,
+            stable_top_10_score=stable_10,
+            stable_top_50_score=stable_50,
             top_10_score=top_10,
             top_50_score=top_50,
             room_id=room.id,
@@ -392,15 +399,18 @@ async def get_daily_challenge(
     if not scheduled:
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
 
+    stable_players, stable_10, stable_50 = await _stable_summary(
+        ctx, day, scheduled.beatmap_id, scheduled.ruleset_id
+    )
     return DailyChallengeResult(
         date=day,
         beatmap=beatmap_ref(scheduled),
         ruleset=scheduled.ruleset_id,
         required_mods=[],
         participants=0,
-        stable_participants=await _stable_participants(
-            ctx, day, scheduled.beatmap_id, scheduled.ruleset_id
-        ),
+        stable_participants=stable_players,
+        stable_top_10_score=stable_10,
+        stable_top_50_score=stable_50,
         top_10_score=None,
         top_50_score=None,
         room_id=room.id if room else None,
