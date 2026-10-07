@@ -313,21 +313,19 @@ def test_window_defaults_to_the_utc_day() -> None:
     assert end == datetime(2026, 10, 4, tzinfo=UTC)
 
 
-def test_window_with_only_a_start_lasts_a_day() -> None:
+def test_window_lasts_a_day_from_its_start() -> None:
     start, end = rooms.window_of(date(2026, 10, 3), datetime(2026, 10, 3, 18, 0))
 
     assert start == datetime(2026, 10, 3, 18, tzinfo=UTC)
     assert end == datetime(2026, 10, 4, 18, tzinfo=UTC)
 
 
-def test_stable_scores_follow_a_custom_window() -> None:
-    window = rooms.window_of(
-        date(2026, 10, 3), datetime(2026, 10, 3, 12), datetime(2026, 10, 3, 18)
-    )
+def test_stable_scores_follow_a_custom_start() -> None:
+    window = rooms.window_of(date(2026, 10, 3), datetime(2026, 10, 3, 12))
 
     start, end = rooms.window_bounds(window)
 
-    assert end - start == 6 * 3600
+    assert end - start == 24 * 3600
     assert start == rooms.day_bounds(date(2026, 10, 3))[0] + 12 * 3600
 
 
@@ -336,11 +334,10 @@ async def test_a_challenge_stays_secret_until_its_own_start() -> None:
     now = datetime.now(UTC)
     mysql = MockMySQLAdapter()
     mysql.set_result(
-        "starts_at, ends_at FROM lazer_daily_challenges",
+        "starts_at FROM lazer_daily_challenges",
         {
             "challenge_date": now.date(),
             "starts_at": (now + timedelta(hours=2)).replace(tzinfo=None),
-            "ends_at": None,
         },
     )
     mysql.set_result("FROM lazer_daily_challenges d", {"beatmap_id": 1})

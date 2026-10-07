@@ -95,9 +95,8 @@ class PercentileData(BaseModel):
 
 class ScheduleData(BaseModel):
     challenge_date: date
-    # UTC, naive as MySQL returns them. Without them the challenge runs for its UTC day.
+    # UTC, naive as MySQL returns them. Without it the challenge starts at the beginning of its date.
     starts_at: datetime | None = None
-    ends_at: datetime | None = None
 
 
 class CountData(BaseModel):
@@ -122,7 +121,7 @@ class RoomsRepository:
 
     async def list_scheduled(self, start: date, end: date) -> list[ScheduleData]:
         rows = await self._mysql.fetch_all(
-            """SELECT challenge_date, starts_at, ends_at FROM lazer_daily_challenges
+            """SELECT challenge_date, starts_at FROM lazer_daily_challenges
                WHERE challenge_date >= :start AND challenge_date < :end
                ORDER BY challenge_date""",
             {"start": start, "end": end},
@@ -131,7 +130,7 @@ class RoomsRepository:
 
     async def find_schedule(self, day: date) -> ScheduleData | None:
         row = await self._mysql.fetch_one(
-            """SELECT challenge_date, starts_at, ends_at FROM lazer_daily_challenges
+            """SELECT challenge_date, starts_at FROM lazer_daily_challenges
                WHERE challenge_date = :day""",
             {"day": day},
         )

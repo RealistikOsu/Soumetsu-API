@@ -169,26 +169,22 @@ def month_bounds(year: int, month: int) -> tuple[date, date]:
 Window = tuple[datetime, datetime]
 
 
-# Without a start and an end a challenge runs for its UTC day, and a start alone runs for 24 hours from it.
-def window_of(
-    day: date,
-    starts_at: datetime | None = None,
-    ends_at: datetime | None = None,
-) -> Window:
+# The challenges are scheduled by hand, so one always lasts 24 hours from its start, which is the beginning of
+# its date unless the schedule says otherwise.
+def window_of(day: date, starts_at: datetime | None = None) -> Window:
     start = (
         starts_at.replace(tzinfo=UTC)
         if starts_at
         else datetime(day.year, day.month, day.day, tzinfo=UTC)
     )
-    end = ends_at.replace(tzinfo=UTC) if ends_at else start + timedelta(days=1)
-    return start, end
+    return start, start + timedelta(days=1)
 
 
 async def challenge_window(ctx: AbstractContext, day: date) -> Window:
     schedule = await ctx.rooms.find_schedule(day)
     if not schedule:
         return window_of(day)
-    return window_of(day, schedule.starts_at, schedule.ends_at)
+    return window_of(day, schedule.starts_at)
 
 
 # A challenge's map is a secret until its window opens, even once it has been scheduled.
@@ -400,7 +396,7 @@ async def get_challenge_days(
         days=[
             ChallengeDay(date=row.challenge_date, has_challenge=True)
             for row in schedule
-            if has_started(window_of(row.challenge_date, row.starts_at, row.ends_at))
+            if has_started(window_of(row.challenge_date, row.starts_at))
         ],
     )
 
