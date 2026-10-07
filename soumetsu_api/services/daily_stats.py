@@ -82,15 +82,17 @@ def build_stats(days: list[DailyDayData], today: date) -> DailyStatsResult:
     current_daily, best_daily = streaks(played, today.toordinal())
     current_weekly, best_weekly = streaks(qualifying, week_index(today))
 
-    finalised = [day for day in days if day.finalised]
+    placements = [
+        max(day.placement, day.stable_placement) for day in days if day.finalised
+    ]
     return DailyStatsResult(
         total_days=len(days),
         current_daily_streak=current_daily,
         current_weekly_streak=current_weekly,
         best_daily_streak=best_daily,
         best_weekly_streak=best_weekly,
-        top_10_placements=sum(day.placement == 2 for day in finalised),
-        top_50_placements=sum(day.placement >= 1 for day in finalised),
+        top_10_placements=sum(placement == 2 for placement in placements),
+        top_50_placements=sum(placement >= 1 for placement in placements),
     )
 
 

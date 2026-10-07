@@ -28,10 +28,18 @@ USER_ROW = {
 
 
 def played(
-    *days: date, placement: int = 0, finalised: bool = True
+    *days: date,
+    placement: int = 0,
+    stable_placement: int = 0,
+    finalised: bool = True,
 ) -> list[DailyDayData]:
     return [
-        DailyDayData(challenge_date=d, placement=placement, finalised=finalised)
+        DailyDayData(
+            challenge_date=d,
+            placement=placement,
+            stable_placement=stable_placement,
+            finalised=finalised,
+        )
         for d in days
     ]
 
@@ -140,6 +148,47 @@ def test_placements_count_finalised_days_only() -> None:
     assert stats.total_days == 5
 
 
+def test_stable_only_days_count_for_participation_and_streaks() -> None:
+    days = played(ago(0), ago(2), ago(3))
+    days += played(ago(1), stable_placement=1)
+
+    stats = daily_stats.build_stats(days, TODAY)
+
+    assert stats.total_days == 4
+    assert stats.current_daily_streak == 4
+    assert stats.best_daily_streak == 4
+
+
+def test_better_of_the_two_placements_is_used() -> None:
+    days = played(ago(10), placement=2, stable_placement=1)
+    days += played(ago(11), placement=1, stable_placement=2)
+    days += played(ago(12), placement=0, stable_placement=1)
+
+    stats = daily_stats.build_stats(days, TODAY)
+
+    assert stats.top_10_placements == 2
+    assert stats.top_50_placements == 3
+
+
+def test_day_with_both_ladders_counts_once_per_tier() -> None:
+    days = played(ago(10), placement=2, stable_placement=1)
+
+    stats = daily_stats.build_stats(days, TODAY)
+
+    assert stats.top_10_placements == 1
+    assert stats.top_50_placements == 1
+
+
+def test_unfinalised_stable_placement_does_not_count() -> None:
+    days = played(ago(0), stable_placement=2, finalised=False)
+
+    stats = daily_stats.build_stats(days, TODAY)
+
+    assert stats.total_days == 1
+    assert stats.top_10_placements == 0
+    assert stats.top_50_placements == 0
+
+
 @pytest.mark.asyncio
 async def test_unknown_user_is_not_found() -> None:
     result = await daily_stats.get_user_stats(MockContext(MockMySQLAdapter()), 404)
@@ -177,7 +226,14 @@ async def test_rows_are_read_from_the_table() -> None:
     mysql.set_result("FROM users", USER_ROW)
     mysql.set_result(
         "lazer_daily_challenge_days",
-        [{"challenge_date": ago(0), "placement": 2, "finalised": 1}],
+        [
+            {
+                "challenge_date": ago(0),
+                "placement": 0,
+                "stable_placement": 2,
+                "finalised": 1,
+            }
+        ],
     )
 
     result = await daily_stats.get_user_stats(MockContext(mysql), 7, today=TODAY)
