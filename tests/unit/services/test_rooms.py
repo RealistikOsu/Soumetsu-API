@@ -223,8 +223,11 @@ def test_playlist_response_keeps_shapes() -> None:
 
 
 def test_daily_response_serialises_date() -> None:
+    window = rooms.window_of(date(2026, 10, 1))
     result = rooms.DailyChallengeResult(
         date=date(2026, 10, 1),
+        starts_at=window[0],
+        ends_at=window[1],
         beatmap=rooms.beatmap_ref(make_item(1, 5.0)),
         ruleset=0,
         required_mods=[],
@@ -242,6 +245,8 @@ def test_daily_response_serialises_date() -> None:
     )
 
     assert dumped["date"] == "2026-10-01"
+    assert dumped["starts_at"] == "2026-10-01T00:00:00Z"
+    assert dumped["ends_at"] == "2026-10-02T00:00:00Z"
     assert dumped["top_10_score"] is None
     assert dumped["stable_participants"] == 3
     assert dumped["stable_top_10_score"] == 900000
@@ -273,7 +278,7 @@ async def test_future_days_stay_secret_even_when_scheduled() -> None:
     mysql = MockMySQLAdapter()
     mysql.set_result("FROM lazer_daily_challenges d", {"beatmap_id": 1})
     ctx = MockContext(mysql)
-    tomorrow = rooms.today() + timedelta(days=1)
+    tomorrow = datetime.now(UTC).date() + timedelta(days=1)
 
     assert await rooms.get_daily_challenge(ctx, tomorrow) == (
         RoomsError.DAILY_CHALLENGE_NOT_FOUND
@@ -286,7 +291,7 @@ async def test_future_days_stay_secret_even_when_scheduled() -> None:
 
 @pytest.mark.asyncio
 async def test_calendar_leaves_out_scheduled_future_days() -> None:
-    today = rooms.today()
+    today = datetime.now(UTC).date()
     mysql = MockMySQLAdapter()
     mysql.set_result(
         "FROM lazer_daily_challenges",
@@ -299,6 +304,51 @@ async def test_calendar_leaves_out_scheduled_future_days() -> None:
     result = await rooms.get_challenge_days(MockContext(mysql), today.year, today.month)
 
     assert [day.date for day in result.days] == [today]
+
+
+def test_window_defaults_to_the_utc_day() -> None:
+    start, end = rooms.window_of(date(2026, 10, 3))
+
+    assert start == datetime(2026, 10, 3, tzinfo=UTC)
+    assert end == datetime(2026, 10, 4, tzinfo=UTC)
+
+
+def test_window_with_only_a_start_lasts_a_day() -> None:
+    start, end = rooms.window_of(date(2026, 10, 3), datetime(2026, 10, 3, 18, 0))
+
+    assert start == datetime(2026, 10, 3, 18, tzinfo=UTC)
+    assert end == datetime(2026, 10, 4, 18, tzinfo=UTC)
+
+
+def test_stable_scores_follow_a_custom_window() -> None:
+    window = rooms.window_of(
+        date(2026, 10, 3), datetime(2026, 10, 3, 12), datetime(2026, 10, 3, 18)
+    )
+
+    start, end = rooms.window_bounds(window)
+
+    assert end - start == 6 * 3600
+    assert start == rooms.day_bounds(date(2026, 10, 3))[0] + 12 * 3600
+
+
+@pytest.mark.asyncio
+async def test_a_challenge_stays_secret_until_its_own_start() -> None:
+    now = datetime.now(UTC)
+    mysql = MockMySQLAdapter()
+    mysql.set_result(
+        "starts_at, ends_at FROM lazer_daily_challenges",
+        {
+            "challenge_date": now.date(),
+            "starts_at": (now + timedelta(hours=2)).replace(tzinfo=None),
+            "ends_at": None,
+        },
+    )
+    mysql.set_result("FROM lazer_daily_challenges d", {"beatmap_id": 1})
+    ctx = MockContext(mysql)
+
+    assert await rooms.get_daily_challenge(ctx, now.date()) == (
+        RoomsError.DAILY_CHALLENGE_NOT_FOUND
+    )
 
 
 @pytest.mark.asyncio

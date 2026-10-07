@@ -72,6 +72,8 @@ class ChallengeDaysResult:
 @dataclass
 class DailyChallengeResult:
     date: date
+    starts_at: datetime
+    ends_at: datetime
     beatmap: BeatmapRef
     ruleset: int
     required_mods: list[Mod]
@@ -164,9 +166,34 @@ def month_bounds(year: int, month: int) -> tuple[date, date]:
     return date(year, month, 1), end
 
 
-# A day's map is a secret until the day starts (00:00 UTC), even once it has been scheduled.
-def today() -> date:
-    return datetime.now(UTC).date()
+Window = tuple[datetime, datetime]
+
+
+# Without a start and an end a challenge runs for its UTC day, and a start alone runs for 24 hours from it.
+def window_of(
+    day: date,
+    starts_at: datetime | None = None,
+    ends_at: datetime | None = None,
+) -> Window:
+    start = (
+        starts_at.replace(tzinfo=UTC)
+        if starts_at
+        else datetime(day.year, day.month, day.day, tzinfo=UTC)
+    )
+    end = ends_at.replace(tzinfo=UTC) if ends_at else start + timedelta(days=1)
+    return start, end
+
+
+async def challenge_window(ctx: AbstractContext, day: date) -> Window:
+    schedule = await ctx.rooms.find_schedule(day)
+    if not schedule:
+        return window_of(day)
+    return window_of(day, schedule.starts_at, schedule.ends_at)
+
+
+# A challenge's map is a secret until its window opens, even once it has been scheduled.
+def has_started(window: Window) -> bool:
+    return window[0] <= datetime.now(UTC)
 
 
 def pick_percentiles(
@@ -205,9 +232,12 @@ def shape_scores(
     ]
 
 
+def window_bounds(window: Window) -> tuple[int, int]:
+    return int(window[0].timestamp()), int(window[1].timestamp())
+
+
 def day_bounds(day: date) -> tuple[int, int]:
-    start = datetime(day.year, day.month, day.day, tzinfo=UTC)
-    return int(start.timestamp()), int((start + timedelta(days=1)).timestamp())
+    return window_bounds(window_of(day))
 
 
 def shape_stable_scores(
@@ -321,14 +351,14 @@ async def _scores(
 
 async def _stable_summary(
     ctx: AbstractContext,
-    day: date,
+    window: Window,
     beatmap_id: int,
     ruleset: int,
 ) -> tuple[int, int | None, int | None]:
     md5 = await ctx.rooms.find_beatmap_md5(beatmap_id)
     if not md5:
         return 0, None, None
-    start, end = day_bounds(day)
+    start, end = window_bounds(window)
     return pick_percentiles(
         await ctx.rooms.list_stable_percentiles(md5, ruleset, start, end)
     )
@@ -336,7 +366,7 @@ async def _stable_summary(
 
 async def _stable_scores(
     ctx: AbstractContext,
-    day: date,
+    window: Window,
     beatmap_id: int,
     ruleset: int,
     page: int,
@@ -346,7 +376,7 @@ async def _stable_scores(
     if not md5:
         return ScoresResult(total=0, scores=[])
 
-    start, end = day_bounds(day)
+    start, end = window_bounds(window)
     offset = (page - 1) * limit
     total = await ctx.rooms.count_stable_players(md5, ruleset, start, end)
     if total <= offset:
@@ -365,10 +395,12 @@ async def get_challenge_days(
     month: int,
 ) -> ChallengeDaysResult:
     start, end = month_bounds(year, month)
-    days = await ctx.rooms.list_scheduled_days(start, end)
+    schedule = await ctx.rooms.list_scheduled(start, end)
     return ChallengeDaysResult(
         days=[
-            ChallengeDay(date=day, has_challenge=True) for day in days if day <= today()
+            ChallengeDay(date=row.challenge_date, has_challenge=True)
+            for row in schedule
+            if has_started(window_of(row.challenge_date, row.starts_at, row.ends_at))
         ],
     )
 
@@ -377,7 +409,8 @@ async def get_daily_challenge(
     ctx: AbstractContext,
     day: date,
 ) -> RoomsError.OnSuccess[DailyChallengeResult]:
-    if day > today():
+    window = await challenge_window(ctx, day)
+    if not has_started(window):
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
 
     room = await ctx.rooms.find_daily_room(day)
@@ -389,10 +422,12 @@ async def get_daily_challenge(
             await ctx.rooms.list_percentiles(room.id, item.item_id),
         )
         stable_players, stable_10, stable_50 = await _stable_summary(
-            ctx, day, item.beatmap_id, item.ruleset_id
+            ctx, window, item.beatmap_id, item.ruleset_id
         )
         return DailyChallengeResult(
             date=day,
+            starts_at=window[0],
+            ends_at=window[1],
             beatmap=beatmap_ref(item),
             ruleset=item.ruleset_id,
             required_mods=parse_mods(item.required_mods),
@@ -410,10 +445,12 @@ async def get_daily_challenge(
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
 
     stable_players, stable_10, stable_50 = await _stable_summary(
-        ctx, day, scheduled.beatmap_id, scheduled.ruleset_id
+        ctx, window, scheduled.beatmap_id, scheduled.ruleset_id
     )
     return DailyChallengeResult(
         date=day,
+        starts_at=window[0],
+        ends_at=window[1],
         beatmap=beatmap_ref(scheduled),
         ruleset=scheduled.ruleset_id,
         required_mods=[],
@@ -434,7 +471,8 @@ async def get_daily_scores(
     limit: int,
     source: Literal["lazer", "stable"] = "lazer",
 ) -> RoomsError.OnSuccess[ScoresResult]:
-    if day > today():
+    window = await challenge_window(ctx, day)
+    if not has_started(window):
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
 
     room = await ctx.rooms.find_daily_room(day)
@@ -442,7 +480,7 @@ async def get_daily_scores(
     if room and items:
         if source == "stable":
             return await _stable_scores(
-                ctx, day, items[0].beatmap_id, items[0].ruleset_id, page, limit
+                ctx, window, items[0].beatmap_id, items[0].ruleset_id, page, limit
             )
         return await _scores(ctx, room.id, items[0].item_id, page, limit)
 
@@ -451,7 +489,7 @@ async def get_daily_scores(
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
     if source == "stable":
         return await _stable_scores(
-            ctx, day, scheduled.beatmap_id, scheduled.ruleset_id, page, limit
+            ctx, window, scheduled.beatmap_id, scheduled.ruleset_id, page, limit
         )
     return ScoresResult(total=0, scores=[])
 

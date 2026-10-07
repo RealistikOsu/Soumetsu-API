@@ -93,6 +93,13 @@ class PercentileData(BaseModel):
     best: int
 
 
+class ScheduleData(BaseModel):
+    challenge_date: date
+    # UTC, naive as MySQL returns them. Without them the challenge runs for its UTC day.
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+
+
 class CountData(BaseModel):
     room_id: int
     room_item_id: int | None = None
@@ -113,14 +120,22 @@ class RoomsRepository:
     def __init__(self, mysql: ImplementsMySQL) -> None:
         self._mysql = mysql
 
-    async def list_scheduled_days(self, start: date, end: date) -> list[date]:
+    async def list_scheduled(self, start: date, end: date) -> list[ScheduleData]:
         rows = await self._mysql.fetch_all(
-            """SELECT challenge_date FROM lazer_daily_challenges
+            """SELECT challenge_date, starts_at, ends_at FROM lazer_daily_challenges
                WHERE challenge_date >= :start AND challenge_date < :end
                ORDER BY challenge_date""",
             {"start": start, "end": end},
         )
-        return [row["challenge_date"] for row in rows]
+        return [ScheduleData(**row) for row in rows]
+
+    async def find_schedule(self, day: date) -> ScheduleData | None:
+        row = await self._mysql.fetch_one(
+            """SELECT challenge_date, starts_at, ends_at FROM lazer_daily_challenges
+               WHERE challenge_date = :day""",
+            {"day": day},
+        )
+        return ScheduleData(**row) if row else None
 
     async def find_scheduled_beatmap(self, day: date) -> RoundBeatmapData | None:
         row = await self._mysql.fetch_one(

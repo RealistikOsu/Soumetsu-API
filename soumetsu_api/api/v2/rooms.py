@@ -36,6 +36,8 @@ class ChallengeDaysResponse(BaseModel):
 
 class DailyChallengeResponse(BaseModel):
     date: date
+    starts_at: datetime
+    ends_at: datetime
     beatmap: BeatmapRefResponse
     ruleset: int
     required_mods: list[ModResponse]
