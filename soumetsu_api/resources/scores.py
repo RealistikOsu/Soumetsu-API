@@ -306,22 +306,23 @@ class ScoresRepository:
         self, mode: int, variant: int, limit: int, offset: int
     ) -> list[ScoreTopPlay]:
         rows = await self._mysql.fetch_all(
-            f"""SELECT * FROM (
-                    SELECT {LAZER_SCORE_COLUMNS}, {_lazer_beatmap_columns(mode)},
-                           u.username,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY l.user_id, l.beatmap_md5
-                               ORDER BY l.pp DESC, l.id DESC
-                           ) AS rn
-                    FROM lazer_scores l
-                    INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
-                    INNER JOIN users u ON l.user_id = u.id
-                    WHERE l.ruleset_id = :mode AND l.variant = :variant
-                      AND l.ranked_mods = 1 AND l.passed = 1 AND l.pp > 0
-                      AND b.ranked IN (2, 3) AND u.privileges & 1 > 0
-                ) best
-                WHERE best.rn = 1
-                ORDER BY best.pp DESC
+            # Walks idx_lazer_scores_top in pp order and stops at the page, instead of ranking every score first.
+            f"""SELECT STRAIGHT_JOIN {LAZER_SCORE_COLUMNS}, {_lazer_beatmap_columns(mode)},
+                       u.username
+                FROM lazer_scores l FORCE INDEX (idx_lazer_scores_top)
+                INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
+                INNER JOIN users u ON l.user_id = u.id
+                WHERE l.ruleset_id = :mode AND l.variant = :variant
+                  AND l.ranked_mods = 1 AND l.passed = 1 AND l.pp > 0
+                  AND b.ranked IN (2, 3) AND u.privileges & 1 > 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM lazer_scores l2
+                      WHERE l2.user_id = l.user_id AND l2.beatmap_md5 = l.beatmap_md5
+                        AND l2.ruleset_id = l.ruleset_id AND l2.variant = l.variant
+                        AND l2.ranked_mods = 1 AND l2.passed = 1
+                        AND (l2.pp > l.pp OR (l2.pp = l.pp AND l2.id > l.id))
+                  )
+                ORDER BY l.pp DESC, l.id DESC
                 LIMIT :limit OFFSET :offset""",
             {"mode": mode, "variant": variant, "limit": limit, "offset": offset},
         )
