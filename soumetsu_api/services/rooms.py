@@ -164,6 +164,11 @@ def month_bounds(year: int, month: int) -> tuple[date, date]:
     return date(year, month, 1), end
 
 
+# A day's map is a secret until the day starts (00:00 UTC), even once it has been scheduled.
+def today() -> date:
+    return datetime.now(UTC).date()
+
+
 def pick_percentiles(
     rows: list[PercentileData],
 ) -> tuple[int, int | None, int | None]:
@@ -362,7 +367,9 @@ async def get_challenge_days(
     start, end = month_bounds(year, month)
     days = await ctx.rooms.list_scheduled_days(start, end)
     return ChallengeDaysResult(
-        days=[ChallengeDay(date=day, has_challenge=True) for day in days],
+        days=[
+            ChallengeDay(date=day, has_challenge=True) for day in days if day <= today()
+        ],
     )
 
 
@@ -370,6 +377,9 @@ async def get_daily_challenge(
     ctx: AbstractContext,
     day: date,
 ) -> RoomsError.OnSuccess[DailyChallengeResult]:
+    if day > today():
+        return RoomsError.DAILY_CHALLENGE_NOT_FOUND
+
     room = await ctx.rooms.find_daily_room(day)
     items = await ctx.rooms.list_items([room.id]) if room else []
 
@@ -424,6 +434,9 @@ async def get_daily_scores(
     limit: int,
     source: Literal["lazer", "stable"] = "lazer",
 ) -> RoomsError.OnSuccess[ScoresResult]:
+    if day > today():
+        return RoomsError.DAILY_CHALLENGE_NOT_FOUND
+
     room = await ctx.rooms.find_daily_room(day)
     items = await ctx.rooms.list_items([room.id]) if room else []
     if room and items:

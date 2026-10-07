@@ -4,18 +4,19 @@ from dataclasses import asdict
 from datetime import UTC
 from datetime import date
 from datetime import datetime
+from datetime import timedelta
 
 import pytest
 
 from soumetsu_api.api.v2.rooms import DailyChallengeResponse
 from soumetsu_api.api.v2.rooms import PlaylistDetailResponse
 from soumetsu_api.api.v2.rooms import ScoresResponse
+from soumetsu_api.resources.rooms import _STABLE_PASSED
 from soumetsu_api.resources.rooms import STATUS_FILTERS
 from soumetsu_api.resources.rooms import BestScoreData
 from soumetsu_api.resources.rooms import LadderData
 from soumetsu_api.resources.rooms import PercentileData
 from soumetsu_api.resources.rooms import RoomData
-from soumetsu_api.resources.rooms import _STABLE_PASSED
 from soumetsu_api.resources.rooms import RoomItemData
 from soumetsu_api.resources.rooms import StableLadderData
 from soumetsu_api.services import is_error
@@ -265,6 +266,39 @@ async def test_unknown_day_is_not_found() -> None:
     assert await rooms.get_daily_scores(ctx, date(2026, 10, 1), 1, 50) == (
         RoomsError.DAILY_CHALLENGE_NOT_FOUND
     )
+
+
+@pytest.mark.asyncio
+async def test_future_days_stay_secret_even_when_scheduled() -> None:
+    mysql = MockMySQLAdapter()
+    mysql.set_result("FROM lazer_daily_challenges d", {"beatmap_id": 1})
+    ctx = MockContext(mysql)
+    tomorrow = rooms.today() + timedelta(days=1)
+
+    assert await rooms.get_daily_challenge(ctx, tomorrow) == (
+        RoomsError.DAILY_CHALLENGE_NOT_FOUND
+    )
+    for source in ("lazer", "stable"):
+        assert await rooms.get_daily_scores(ctx, tomorrow, 1, 50, source) == (
+            RoomsError.DAILY_CHALLENGE_NOT_FOUND
+        )
+
+
+@pytest.mark.asyncio
+async def test_calendar_leaves_out_scheduled_future_days() -> None:
+    today = rooms.today()
+    mysql = MockMySQLAdapter()
+    mysql.set_result(
+        "FROM lazer_daily_challenges",
+        [
+            {"challenge_date": today},
+            {"challenge_date": today + timedelta(days=1)},
+        ],
+    )
+
+    result = await rooms.get_challenge_days(MockContext(mysql), today.year, today.month)
+
+    assert [day.date for day in result.days] == [today]
 
 
 @pytest.mark.asyncio
