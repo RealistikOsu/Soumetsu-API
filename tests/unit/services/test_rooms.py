@@ -11,7 +11,7 @@ import pytest
 from soumetsu_api.api.v2.rooms import DailyChallengeResponse
 from soumetsu_api.api.v2.rooms import PlaylistDetailResponse
 from soumetsu_api.api.v2.rooms import ScoresResponse
-from soumetsu_api.resources.rooms import _STABLE_PASSED
+from soumetsu_api.resources.rooms import _stable_plays
 from soumetsu_api.resources.rooms import STATUS_FILTERS
 from soumetsu_api.resources.rooms import BestScoreData
 from soumetsu_api.resources.rooms import LadderData
@@ -431,8 +431,19 @@ def test_stable_mods_use_the_shared_conversion() -> None:
 
 
 def test_stable_queries_are_no_mod_only() -> None:
-    assert "s.mods = 0" in _STABLE_PASSED
-    assert ":freemod = 1" in _STABLE_PASSED
+    plays = _stable_plays(False, True)
+
+    assert "s.mods = 0" in plays
+    assert "scores_relax" not in plays
+
+
+def test_a_freemod_challenge_takes_every_mod_from_every_board() -> None:
+    plays = _stable_plays(True, True)
+
+    assert "s.mods" not in plays.replace("s.max_combo, s.mods,", "")
+    assert all(
+        table in plays for table in ("scores s", "scores_relax s", "scores_ap s")
+    )
 
 
 def test_stable_response_shape() -> None:

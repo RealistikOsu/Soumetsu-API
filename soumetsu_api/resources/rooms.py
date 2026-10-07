@@ -106,17 +106,35 @@ class CountData(BaseModel):
     participants: int
 
 
-# "+ 0" on completed and play_mode keeps MySQL on the beatmap_md5 index instead of intersecting low-cardinality ones.
-# The daily challenge is no-mod, so stable plays with any mod bit set don't count. A freemod challenge also takes
-# NF, EZ, HD, HR, SD, FL, SO and PF; the speed mods, Relax and Autopilot never count.
-FREEMOD_MASK = 1 | 2 | 8 | 16 | 32 | 1024 | 4096 | 16384
-_MODS_ALLOWED = (
-    f"(s.mods = 0 OR (:freemod = 1 AND (s.mods | {FREEMOD_MASK}) = {FREEMOD_MASK}))"
+_PLAY_COLUMNS = (
+    "s.id, s.userid, s.score, s.accuracy, s.max_combo, s.mods, s.playback_rate, "
+    "s.`300_count`, s.`100_count`, s.`50_count`, s.katus_count, s.gekis_count, "
+    "s.misses_count, s.time, s.completed"
 )
-_STABLE_PASSED = f"""FROM scores s
-             INNER JOIN users u ON u.id = s.userid AND u.privileges & 1
-             WHERE s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode AND {_MODS_ALLOWED}
-               AND s.time >= :start AND s.time < :end AND s.completed + 0 >= 1"""
+
+
+# The plays on the map inside the window, as a table to select from. A freemod challenge takes every play whatever
+# its mods, from the vanilla, relax and autopilot tables alike, while the others take vanilla plays without mods.
+# "+ 0" on completed and play_mode keeps MySQL on the beatmap_md5 index instead of intersecting low-cardinality ones.
+def _stable_plays(freemod: bool, passed_only: bool) -> str:
+    tables = ("scores", "scores_relax", "scores_ap") if freemod else ("scores",)
+    where = (
+        "s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode "
+        "AND s.time >= :start AND s.time < :end"
+    )
+    if not freemod:
+        where += " AND s.mods = 0"
+    if passed_only:
+        where += " AND s.completed + 0 >= 1"
+    selects = (
+        f"SELECT {_PLAY_COLUMNS} FROM {table} s WHERE {where}" for table in tables
+    )
+    return "(" + " UNION ALL ".join(selects) + ")"
+
+
+def _stable_passed(freemod: bool) -> str:
+    return f"""FROM {_stable_plays(freemod, True)} s
+             INNER JOIN users u ON u.id = s.userid AND u.privileges & 1"""
 
 
 class RoomsRepository:
@@ -316,14 +334,8 @@ class RoomsRepository:
         freemod: bool,
     ) -> int:
         count = await self._mysql.fetch_val(
-            f"SELECT COUNT(DISTINCT s.userid) {_STABLE_PASSED}",
-            {
-                "md5": md5,
-                "mode": mode,
-                "start": start,
-                "end": end,
-                "freemod": int(freemod),
-            },
+            f"SELECT COUNT(DISTINCT s.userid) {_stable_passed(freemod)}",
+            {"md5": md5, "mode": mode, "start": start, "end": end},
         )
         return count or 0
 
@@ -340,16 +352,10 @@ class RoomsRepository:
                 FROM (SELECT g.best,
                              ROW_NUMBER() OVER (ORDER BY g.best DESC, g.userid) AS rn,
                              COUNT(*) OVER () AS n
-                      FROM (SELECT s.userid, MAX(s.score) AS best {_STABLE_PASSED}
+                      FROM (SELECT s.userid, MAX(s.score) AS best {_stable_passed(freemod)}
                             GROUP BY s.userid) g) r
                 WHERE r.rn IN (CEIL(r.n / 10), CEIL(r.n / 2))""",
-            {
-                "md5": md5,
-                "mode": mode,
-                "start": start,
-                "end": end,
-                "freemod": int(freemod),
-            },
+            {"md5": md5, "mode": mode, "start": start, "end": end},
         )
         return [PercentileData(**row) for row in rows]
 
@@ -380,10 +386,7 @@ class RoomsRepository:
                                          s.time, s.id
                             ) AS rn,
                             COUNT(*) OVER (PARTITION BY s.userid) AS plays
-                     FROM scores s
-                     WHERE s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode
-                       AND {_MODS_ALLOWED}
-                       AND s.time >= :start AND s.time < :end) r
+                     FROM {_stable_plays(freemod, False)} s) r
                INNER JOIN users u ON u.id = r.userid AND u.privileges & 1
                WHERE r.rn = 1 AND r.completed + 0 >= 1
                ORDER BY r.score DESC, r.time, r.userid
@@ -393,7 +396,6 @@ class RoomsRepository:
                 "mode": mode,
                 "start": start,
                 "end": end,
-                "freemod": int(freemod),
                 "limit": limit,
                 "offset": offset,
             },
