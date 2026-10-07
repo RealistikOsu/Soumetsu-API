@@ -40,6 +40,7 @@ class ScoreResponse(BaseModel):
     accuracy: float
     pp: float
     playtime: int
+    has_replay: bool | None = None
 
 
 class BeatmapInfo(BaseModel):
@@ -98,6 +99,7 @@ async def get_top_plays(
                 accuracy=s.accuracy,
                 pp=s.pp,
                 playtime=s.playtime,
+                has_replay=s.has_replay,
                 beatmap=BeatmapInfo(
                     beatmap_id=s.beatmap_id,
                     beatmapset_id=s.beatmapset_id,
@@ -141,6 +143,7 @@ async def get_top_plays_mixed(ctx: RequiresContext) -> Response:
                 accuracy=s.accuracy,
                 pp=s.pp,
                 playtime=s.playtime,
+                has_replay=s.has_replay,
                 beatmap=BeatmapInfo(
                     beatmap_id=s.beatmap_id,
                     beatmapset_id=s.beatmapset_id,
@@ -186,6 +189,7 @@ async def get_score(
             accuracy=result.accuracy,
             pp=result.pp,
             playtime=result.playtime,
+            has_replay=result.has_replay,
         ),
     )
 
@@ -234,6 +238,7 @@ def to_response(s: scores.ScoreWithBeatmapResult) -> ScoreWithBeatmapResponse:
         accuracy=s.accuracy,
         pp=s.pp,
         playtime=s.playtime,
+        has_replay=s.has_replay,
         beatmap=BeatmapInfo(
             beatmap_id=s.beatmap_id,
             beatmapset_id=s.beatmapset_id,
@@ -368,6 +373,7 @@ class LazerScorePlayerResponse(BaseModel):
 
 class LazerScoreDetailResponse(BaseModel):
     id: int
+    source: str
     variant: int
     play_mode: int
     score: int
@@ -392,7 +398,23 @@ class LazerScoreDetailResponse(BaseModel):
 )
 async def get_lazer_score(ctx: RequiresContext, score_id: int) -> Response:
     result = await scores.get_lazer_score(ctx, score_id)
-    result = response.unwrap(result)
+    return _detail_response(response.unwrap(result), "lazer")
+
+
+@router.get(
+    "/scores/{score_id}/detail",
+    response_model=response.BaseResponse[LazerScoreDetailResponse],
+)
+async def get_stable_score(
+    ctx: RequiresContext,
+    score_id: int,
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
+) -> Response:
+    result = await scores.get_stable_score(ctx, score_id, custom_mode)
+    return _detail_response(response.unwrap(result), "stable")
+
+
+def _detail_response(result: scores.LazerScoreDetailResult, source: str) -> Response:
     s = result.score
 
     beatmap = None
@@ -413,6 +435,7 @@ async def get_lazer_score(ctx: RequiresContext, score_id: int) -> Response:
     return response.create(
         LazerScoreDetailResponse(
             id=s.id,
+            source=source,
             variant=s.variant,
             play_mode=s.play_mode,
             score=s.score,

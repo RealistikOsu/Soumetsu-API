@@ -9,6 +9,8 @@ from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.constants import LAZER_VARIANTS
 from soumetsu_api.resources.ranked_play import stars_for
 from soumetsu_api.utilities import lazer
+from soumetsu_api.utilities.grades import stable_grade
+from soumetsu_api.utilities.mods import mods_from_score
 
 SCORE_TABLES = ["scores", "scores_relax", "scores_ap"]
 DIFFICULTY_COLUMNS = [
@@ -23,7 +25,7 @@ LAZER_SCORE_COLUMNS = """l.id, l.beatmap_md5, l.user_id AS player_id, l.total_sc
        l.max_combo, CAST(l.mods AS CHAR) AS lazer_mods,
        CAST(l.statistics AS CHAR) AS lazer_statistics,
        CAST(UNIX_TIMESTAMP(l.ended_at) AS SIGNED) AS submitted_at,
-       l.ruleset_id AS play_mode, l.accuracy, l.pp, l.passed"""
+       l.ruleset_id AS play_mode, l.accuracy, l.pp, l.passed, l.has_replay"""
 
 
 def lazer_score_row_to_data(row: dict) -> dict:
@@ -38,6 +40,7 @@ def lazer_score_row_to_data(row: dict) -> dict:
         "accuracy": float(row["accuracy"]) * 100,
         "pp": float(row["pp"]),
         "completed": 3 if row.pop("passed") else 0,
+        "has_replay": bool(row["has_replay"]),
         "playtime": 0,
     }
 
@@ -68,6 +71,8 @@ class ScoreData(BaseModel):
     pp: float
     playtime: int
     playback_rate: float
+    # Only lazer rows know this; stable scores keep a replay by their completed flag instead.
+    has_replay: bool | None = None
 
 
 class ScoreWithBeatmap(ScoreData):
@@ -174,6 +179,98 @@ def lazer_detail_row_to_data(row: dict) -> LazerScoreDetailData:
     )
 
 
+def stable_statistics(row: dict) -> dict[str, int]:
+    match row["play_mode"]:
+        case 1:
+            return {
+                "great": row["count_300"],
+                "ok": row["count_100"],
+                "miss": row["count_misses"],
+            }
+        case 2:
+            return {
+                "great": row["count_300"],
+                "large_tick_hit": row["count_100"],
+                "small_tick_hit": row["count_50"],
+                "small_tick_miss": row["count_katus"],
+                "miss": row["count_misses"],
+            }
+        case 3:
+            return {
+                "perfect": row["count_gekis"],
+                "great": row["count_300"],
+                "good": row["count_katus"],
+                "ok": row["count_100"],
+                "meh": row["count_50"],
+                "miss": row["count_misses"],
+            }
+        case _:
+            return {
+                "great": row["count_300"],
+                "ok": row["count_100"],
+                "meh": row["count_50"],
+                "miss": row["count_misses"],
+            }
+
+
+def stable_detail_row_to_data(row: dict, custom_mode: int) -> LazerScoreDetailData:
+    beatmap = None
+    if row["beatmap_set_id"] is not None:
+        beatmap = LazerScoreBeatmapData(
+            beatmap_id=row["beatmap_id"],
+            beatmapset_id=row["beatmap_set_id"],
+            song_name=row["song_name"],
+            creator=row["creator"],
+            stars=float(row["stars"]),
+            mode=row["beatmap_mode"],
+            ranked=row["beatmap_ranked"],
+        )
+
+    rate = float(row["playback_rate"])
+    mods = []
+    for mod in mods_from_score(row["mods"], rate):
+        settings = mod.settings
+        if settings is not None:
+            settings = {"speed_change": round(rate, 2)} if rate != 1 else None
+        mods.append({"acronym": mod.acronym, "settings": settings})
+
+    return LazerScoreDetailData(
+        id=row["id"],
+        variant=custom_mode,
+        play_mode=row["play_mode"],
+        score=row["score"],
+        accuracy=float(row["accuracy"]),
+        max_combo=row["max_combo"],
+        pp=float(row["pp"]),
+        rank=stable_grade(
+            row["play_mode"],
+            row["mods"],
+            row["count_300"],
+            row["count_100"],
+            row["count_50"],
+            row["count_katus"],
+            row["count_gekis"],
+            row["count_misses"],
+            row["completed"],
+        ),
+        passed=row["completed"] >= 1,
+        submitted_at=row["submitted_at"],
+        has_replay=row["completed"] == 3,
+        ranked_mods=True,
+        mods=mods,
+        statistics=stable_statistics(row),
+        beatmap_md5=row["beatmap_md5"],
+        beatmap=beatmap,
+        player=LazerScorePlayerData(
+            id=row["player_id"],
+            username=row["username"],
+            country=row["country"],
+            privileges=row["privileges"],
+            last_active=row["latest_activity"],
+        ),
+    )
+
+
 class ScoresRepository:
     __slots__ = ("_mysql",)
 
@@ -241,6 +338,53 @@ class ScoresRepository:
             {"id": score_id},
         )
         return lazer_detail_row_to_data(dict(row)) if row else None
+
+    async def find_stable_detail(
+        self, score_id: int, custom_mode: int
+    ) -> LazerScoreDetailData | None:
+        if custom_mode in LAZER_VARIANTS:
+            return None
+
+        table = self._get_table(custom_mode)
+        row = await self._mysql.fetch_one(
+            f"""SELECT s.id, s.beatmap_md5, s.userid AS player_id, s.score, s.max_combo,
+                       s.mods, s.300_count AS count_300, s.100_count AS count_100,
+                       s.50_count AS count_50, s.katus_count AS count_katus,
+                       s.gekis_count AS count_gekis, s.misses_count AS count_misses,
+                       s.time AS submitted_at, s.play_mode, s.completed, s.accuracy,
+                       s.pp, s.playback_rate,
+                       u.username, u.country, u.privileges, u.latest_activity,
+                       b.beatmap_id, b.beatmapset_id AS beatmap_set_id, b.song_name,
+                       b.mode AS beatmap_mode, b.ranked AS beatmap_ranked,
+                       mu.username AS creator,
+                       {stars_for("s.play_mode")} AS stars
+                FROM {table} s
+                INNER JOIN users u ON u.id = s.userid
+                LEFT JOIN beatmaps b ON b.beatmap_md5 = s.beatmap_md5 AND b.ranked != -1
+                LEFT JOIN users mu ON mu.id = b.mapper_id
+                WHERE s.id = :id""",
+            {"id": score_id},
+        )
+        return stable_detail_row_to_data(dict(row), custom_mode) if row else None
+
+    async def stable_global_rank(self, score_id: int, custom_mode: int) -> int | None:
+        table = self._get_table(custom_mode)
+        # Vanilla boards rank by score, relax and autopilot by pp. Only the best score per player has
+        # completed = 3, so counting rows counts players.
+        column = "score" if custom_mode == 0 else "pp"
+        row = await self._mysql.fetch_one(
+            f"""SELECT
+                   (SELECT COUNT(*) FROM {table} o
+                    INNER JOIN users u ON u.id = o.userid
+                    WHERE o.beatmap_md5 = s.beatmap_md5 AND o.play_mode = s.play_mode
+                      AND o.completed = 3 AND u.privileges & 1 > 0
+                      AND (o.{column} > s.{column}
+                           OR (o.{column} = s.{column} AND o.id < s.id))) AS ahead
+               FROM {table} s
+               WHERE s.id = :id AND s.completed = 3""",
+            {"id": score_id},
+        )
+        return int(row["ahead"]) + 1 if row else None
 
     async def lazer_global_rank(self, score_id: int) -> int | None:
         # Same best-per-player ordering as _list_lazer_beatmap_scores: a score is on the board only when no

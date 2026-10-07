@@ -10,6 +10,8 @@ from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.resources import scores
 from soumetsu_api.resources.leaderboard import _build_leaderboard_key
 from soumetsu_api.services import scores as scores_service
+from soumetsu_api.utilities.grades import stable_grade
+from soumetsu_api.utilities.mods import OsuMods
 from tests.conftest import MockContext
 from tests.conftest import MockMySQLAdapter
 
@@ -32,6 +34,7 @@ LAZER_ROW = {
     "accuracy": 0.9875,
     "pp": 321.5,
     "passed": 1,
+    "has_replay": 1,
 }
 
 
@@ -48,6 +51,7 @@ def test_lazer_row_becomes_score_data() -> None:
     assert score.mods == 64
     assert score.playback_rate == 1.3
     assert score.completed == 3
+    assert score.has_replay is True
 
 
 def test_failed_lazer_row_is_not_completed() -> None:
@@ -231,6 +235,202 @@ class TestLazerDetail:
         mock_mysql.set_result(RANK_QUERY, {"better_own": 1, "ahead": 4})
 
         result = await scores_service.get_lazer_score(mock_context, 12)
+
+        assert not isinstance(result, scores_service.ScoreError)
+        assert result.global_rank is None
+
+
+STABLE_ROW = {
+    "id": 30,
+    "beatmap_md5": "c" * 32,
+    "player_id": 5,
+    "score": 1_200_000,
+    "max_combo": 400,
+    "mods": int(OsuMods.HD | OsuMods.DT),
+    "count_300": 480,
+    "count_100": 15,
+    "count_50": 3,
+    "count_katus": 8,
+    "count_gekis": 90,
+    "count_misses": 2,
+    "submitted_at": 1_700_000_000,
+    "play_mode": 0,
+    "completed": 3,
+    "accuracy": 98.5,
+    "pp": 410.25,
+    "playback_rate": 1.5,
+    "beatmap_id": 7,
+    "beatmap_set_id": 70,
+    "song_name": "Artist - Title [Insane]",
+    "creator": "Mapper",
+    "stars": 5.4,
+    "beatmap_mode": 0,
+    "beatmap_ranked": 2,
+    "username": "Player",
+    "country": "GB",
+    "privileges": 7,
+    "latest_activity": 1_700_000_500,
+}
+STABLE_QUERY = "mu.username AS creator"
+STABLE_RANK_QUERY = "AS ahead"
+
+
+def test_stable_detail_row_matches_the_lazer_shape() -> None:
+    detail = scores.stable_detail_row_to_data(dict(STABLE_ROW), 0)
+
+    assert detail.variant == 0
+    assert detail.accuracy == pytest.approx(98.5)
+    assert detail.passed
+    assert detail.has_replay
+    assert detail.ranked_mods
+    assert detail.statistics == {"great": 480, "ok": 15, "meh": 3, "miss": 2}
+    assert detail.beatmap is not None
+    assert detail.beatmap.beatmapset_id == 70
+    assert detail.player.last_active == 1_700_000_500
+    assert [m["acronym"] for m in detail.mods] == ["CL", "HD", "DT"]
+    assert detail.mods[2]["settings"] == {"speed_change": 1.5}
+    assert detail.mods[1]["settings"] is None
+
+
+def test_stable_detail_has_no_speed_settings_at_normal_rate() -> None:
+    detail = scores.stable_detail_row_to_data({**STABLE_ROW, "playback_rate": 1.0}, 0)
+
+    assert detail.mods[2] == {"acronym": "DT", "settings": None}
+
+
+def test_stable_detail_replay_only_for_best_scores() -> None:
+    detail = scores.stable_detail_row_to_data({**STABLE_ROW, "completed": 2}, 0)
+
+    assert detail.passed
+    assert not detail.has_replay
+
+
+def test_stable_detail_failed_score() -> None:
+    detail = scores.stable_detail_row_to_data({**STABLE_ROW, "completed": 0}, 1)
+
+    assert not detail.passed
+    assert detail.rank == "F"
+    assert detail.variant == 1
+
+
+@pytest.mark.parametrize(
+    ("play_mode", "statistics"),
+    [
+        (1, {"great": 480, "ok": 15, "miss": 2}),
+        (
+            2,
+            {
+                "great": 480,
+                "large_tick_hit": 15,
+                "small_tick_hit": 3,
+                "small_tick_miss": 8,
+                "miss": 2,
+            },
+        ),
+        (
+            3,
+            {"perfect": 90, "great": 480, "good": 8, "ok": 15, "meh": 3, "miss": 2},
+        ),
+    ],
+)
+def test_stable_statistics_per_mode(play_mode: int, statistics: dict) -> None:
+    assert (
+        scores.stable_statistics({**STABLE_ROW, "play_mode": play_mode}) == statistics
+    )
+
+
+@pytest.mark.parametrize(
+    ("play_mode", "mods", "counts", "completed", "grade"),
+    [
+        (0, 0, (100, 0, 0, 0, 0, 0), 3, "X"),
+        (0, int(OsuMods.HD), (100, 0, 0, 0, 0, 0), 3, "XH"),
+        (0, int(OsuMods.FL), (95, 5, 0, 0, 0, 0), 3, "SH"),
+        (0, 0, (95, 5, 0, 0, 0, 0), 3, "S"),
+        (0, 0, (95, 0, 5, 0, 0, 0), 3, "A"),
+        (0, 0, (95, 4, 0, 0, 0, 1), 3, "A"),
+        (0, 0, (85, 15, 0, 0, 0, 0), 3, "A"),
+        (0, 0, (75, 25, 0, 0, 0, 0), 3, "B"),
+        (0, 0, (85, 10, 0, 0, 0, 5), 3, "B"),
+        (0, 0, (65, 35, 0, 0, 0, 0), 3, "C"),
+        (0, 0, (50, 50, 0, 0, 0, 0), 3, "D"),
+        (0, 0, (0, 0, 0, 0, 0, 0), 3, "D"),
+        (0, 0, (100, 0, 0, 0, 0, 0), 0, "F"),
+        (1, 0, (100, 0, 0, 0, 0, 0), 1, "X"),
+        (1, 0, (95, 5, 0, 0, 0, 0), 1, "S"),
+        (2, 0, (100, 0, 0, 0, 0, 0), 3, "X"),
+        (2, int(OsuMods.HD), (990, 0, 0, 0, 0, 5), 3, "SH"),
+        (2, 0, (950, 0, 0, 0, 0, 50), 3, "A"),
+        (2, 0, (910, 0, 0, 0, 0, 90), 3, "B"),
+        (2, 0, (860, 0, 0, 0, 0, 140), 3, "C"),
+        (2, 0, (500, 0, 0, 0, 0, 500), 3, "D"),
+        (3, 0, (100, 0, 0, 0, 0, 0), 3, "X"),
+        (3, int(OsuMods.FL), (100, 0, 0, 0, 100, 0), 3, "XH"),
+        (3, 0, (96, 4, 0, 0, 0, 0), 3, "S"),
+        (3, 0, (90, 10, 0, 0, 0, 0), 3, "A"),
+        (3, 0, (70, 30, 0, 0, 0, 0), 3, "C"),
+        (3, 0, (50, 50, 0, 0, 0, 0), 3, "D"),
+    ],
+)
+def test_stable_grade(
+    play_mode: int,
+    mods: int,
+    counts: tuple[int, int, int, int, int, int],
+    completed: int,
+    grade: str,
+) -> None:
+    # counts: 300, 100, 50, katus, gekis, misses
+    c300, c100, c50, katus, gekis, misses = counts
+
+    assert (
+        stable_grade(play_mode, mods, c300, c100, c50, katus, gekis, misses, completed)
+        == grade
+    )
+
+
+class TestStableDetail:
+    @pytest.mark.asyncio
+    async def test_lazer_custom_modes_are_rejected(
+        self, mock_context: MockContext
+    ) -> None:
+        result = await scores_service.get_stable_score(mock_context, 30, 3)
+
+        assert result == scores_service.ScoreError.INVALID_CUSTOM_MODE
+
+    @pytest.mark.asyncio
+    async def test_unknown_score_is_not_found(self, mock_context: MockContext) -> None:
+        result = await scores_service.get_stable_score(mock_context, 30, 0)
+
+        assert result == scores_service.ScoreError.SCORE_NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_hides_restricted_players(
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+    ) -> None:
+        mock_mysql.set_result(STABLE_QUERY, {**STABLE_ROW, "privileges": 2})
+
+        result = await scores_service.get_stable_score(mock_context, 30, 0)
+
+        assert result == scores_service.ScoreError.SCORE_NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_rank_is_one_past_the_players_ahead(
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+    ) -> None:
+        mock_mysql.set_result(STABLE_QUERY, dict(STABLE_ROW))
+        mock_mysql.set_result(STABLE_RANK_QUERY, {"ahead": 2})
+
+        result = await scores_service.get_stable_score(mock_context, 30, 0)
+
+        assert not isinstance(result, scores_service.ScoreError)
+        assert result.global_rank == 3
+
+    @pytest.mark.asyncio
+    async def test_no_rank_when_not_the_players_best(
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+    ) -> None:
+        mock_mysql.set_result(STABLE_QUERY, {**STABLE_ROW, "completed": 2})
+
+        result = await scores_service.get_stable_score(mock_context, 30, 0)
 
         assert not isinstance(result, scores_service.ScoreError)
         assert result.global_rank is None

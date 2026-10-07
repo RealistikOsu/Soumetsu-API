@@ -75,6 +75,7 @@ class ScoreResult:
     pp: float
     playtime: int
     playback_rate: float
+    has_replay: bool | None
 
 
 @dataclass
@@ -118,6 +119,7 @@ def _score_to_result(score: ScoreData) -> ScoreResult:
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        has_replay=score.has_replay,
     )
 
 
@@ -143,6 +145,7 @@ def score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapRes
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        has_replay=score.has_replay,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
         song_name=score.song_name,
@@ -311,6 +314,7 @@ def _top_play_to_result(score: ScoreTopPlay) -> ScoreTopPlayResult:
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        has_replay=score.has_replay,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
         song_name=score.song_name,
@@ -365,6 +369,7 @@ def _top_play_with_mode_to_result(
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        has_replay=score.has_replay,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
         song_name=score.song_name,
@@ -433,4 +438,20 @@ async def get_lazer_score(
         return ScoreError.SCORE_NOT_FOUND
 
     global_rank = await ctx.scores.lazer_global_rank(score_id)
+    return LazerScoreDetailResult(score=score, global_rank=global_rank)
+
+
+async def get_stable_score(
+    ctx: AbstractContext, score_id: int, custom_mode: int
+) -> ScoreError.OnSuccess[LazerScoreDetailResult]:
+    if custom_mode in LAZER_VARIANTS or not is_valid_custom_mode(custom_mode):
+        return ScoreError.INVALID_CUSTOM_MODE
+
+    score = await ctx.scores.find_stable_detail(score_id, custom_mode)
+    if not score or privileges.is_restricted(
+        privileges.UserPrivileges(score.player.privileges)
+    ):
+        return ScoreError.SCORE_NOT_FOUND
+
+    global_rank = await ctx.scores.stable_global_rank(score_id, custom_mode)
     return LazerScoreDetailResult(score=score, global_rank=global_rank)
