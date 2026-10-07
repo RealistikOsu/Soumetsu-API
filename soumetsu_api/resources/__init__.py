@@ -11,6 +11,7 @@ from . import discord_oauth
 from . import example
 from . import friends
 from . import leaderboard
+from . import multiplayer
 from . import ranked_play
 from . import rooms
 from . import scores
@@ -35,6 +36,7 @@ from .example import ExampleRepository
 from .example import ExampleResource
 from .friends import FriendsRepository
 from .leaderboard import LeaderboardRepository
+from .multiplayer import MultiplayerRepository
 from .ranked_play import RankedPlayRepository
 from .rooms import RoomsRepository
 from .scores import ScoresRepository

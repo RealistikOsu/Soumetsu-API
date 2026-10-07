@@ -8,6 +8,7 @@ from . import comments
 from . import friends
 from . import health
 from . import leaderboard
+from . import multiplayer
 from . import ranked_play
 from . import rooms
 from . import scores

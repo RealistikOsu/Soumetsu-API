@@ -27,6 +27,7 @@ from soumetsu_api.resources import DiscordOAuthRepository
 from soumetsu_api.resources import ExampleRepository
 from soumetsu_api.resources import FriendsRepository
 from soumetsu_api.resources import LeaderboardRepository
+from soumetsu_api.resources import MultiplayerRepository
 from soumetsu_api.resources import RankedPlayRepository
 from soumetsu_api.resources import RoomsRepository
 from soumetsu_api.resources import ScoresRepository
@@ -150,6 +151,10 @@ class AbstractContext(ABC):
     @property
     def user_history(self) -> UserHistoryRepository:
         return UserHistoryRepository(self._mysql)
+
+    @property
+    def multiplayer(self) -> MultiplayerRepository:
+        return MultiplayerRepository(self._mysql)
 
     @property
     def ranked_play(self) -> RankedPlayRepository:
