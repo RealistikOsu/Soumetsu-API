@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import time as time_module
 
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.constants import LAZER_VARIANTS
+from soumetsu_api.resources.ranked_play import stars_for
 from soumetsu_api.utilities import lazer
 
 SCORE_TABLES = ["scores", "scores_relax", "scores_ap"]
@@ -94,6 +96,84 @@ class ScoreTopPlayWithMode(ScoreTopPlay):
     custom_mode: int = 0
 
 
+class LazerScoreBeatmapData(BaseModel):
+    beatmap_id: int
+    beatmapset_id: int
+    song_name: str
+    creator: str | None
+    stars: float
+    mode: int
+    ranked: int
+
+
+class LazerScorePlayerData(BaseModel):
+    id: int
+    username: str
+    country: str
+    privileges: int
+    last_active: int
+
+
+class LazerScoreDetailData(BaseModel):
+    id: int
+    variant: int
+    play_mode: int
+    score: int
+    accuracy: float
+    max_combo: int
+    pp: float
+    rank: str
+    passed: bool
+    submitted_at: int
+    has_replay: bool
+    ranked_mods: bool
+    mods: list[dict]
+    statistics: dict[str, int]
+    beatmap_md5: str
+    beatmap: LazerScoreBeatmapData | None
+    player: LazerScorePlayerData
+
+
+def lazer_detail_row_to_data(row: dict) -> LazerScoreDetailData:
+    beatmap = None
+    if row["beatmap_set_id"] is not None:
+        beatmap = LazerScoreBeatmapData(
+            beatmap_id=row["beatmap_id"],
+            beatmapset_id=row["beatmap_set_id"],
+            song_name=row["song_name"],
+            creator=row["creator"],
+            stars=float(row["stars"]),
+            mode=row["beatmap_mode"],
+            ranked=row["beatmap_ranked"],
+        )
+
+    return LazerScoreDetailData(
+        id=row["id"],
+        variant=row["variant"],
+        play_mode=row["play_mode"],
+        score=row["score"],
+        accuracy=float(row["accuracy"]) * 100,
+        max_combo=row["max_combo"],
+        pp=float(row["pp"]),
+        rank=row["rank"],
+        passed=bool(row["passed"]),
+        submitted_at=row["submitted_at"],
+        has_replay=bool(row["has_replay"]),
+        ranked_mods=bool(row["ranked_mods"]),
+        mods=json.loads(row["lazer_mods"]),
+        statistics=json.loads(row["lazer_statistics"]),
+        beatmap_md5=row["beatmap_md5"],
+        beatmap=beatmap,
+        player=LazerScorePlayerData(
+            id=row["player_id"],
+            username=row["username"],
+            country=row["country"],
+            privileges=row["privileges"],
+            last_active=row["latest_activity"],
+        ),
+    )
+
+
 class ScoresRepository:
     __slots__ = ("_mysql",)
 
@@ -140,6 +220,51 @@ class ScoresRepository:
             {"id": score_id, "variant": variant},
         )
         return ScoreData(**lazer_score_row_to_data(dict(row))) if row else None
+
+    async def find_lazer_detail(self, score_id: int) -> LazerScoreDetailData | None:
+        row = await self._mysql.fetch_one(
+            f"""SELECT l.id, l.variant, l.ruleset_id AS play_mode, l.total_score AS score,
+                       l.accuracy, l.max_combo, l.pp, l.`rank`, l.passed, l.has_replay,
+                       l.ranked_mods, l.beatmap_md5, l.beatmap_id, l.user_id AS player_id,
+                       CAST(UNIX_TIMESTAMP(l.ended_at) AS SIGNED) AS submitted_at,
+                       CAST(l.mods AS CHAR) AS lazer_mods,
+                       CAST(l.statistics AS CHAR) AS lazer_statistics,
+                       u.username, u.country, u.privileges, u.latest_activity,
+                       b.beatmapset_id AS beatmap_set_id, b.song_name, b.mode AS beatmap_mode,
+                       b.ranked AS beatmap_ranked, mu.username AS creator,
+                       {stars_for("l.ruleset_id")} AS stars
+                FROM lazer_scores l
+                INNER JOIN users u ON u.id = l.user_id
+                LEFT JOIN beatmaps b ON b.beatmap_id = l.beatmap_id AND b.ranked != -1
+                LEFT JOIN users mu ON mu.id = b.mapper_id
+                WHERE l.id = :id""",
+            {"id": score_id},
+        )
+        return lazer_detail_row_to_data(dict(row)) if row else None
+
+    async def lazer_global_rank(self, score_id: int) -> int | None:
+        # Same best-per-player ordering as _list_lazer_beatmap_scores: a score is on the board only when no
+        # other score of its player beats it, and its place is one more than the players with a better best.
+        row = await self._mysql.fetch_one(
+            """SELECT
+                   (SELECT COUNT(*) FROM lazer_scores o
+                    WHERE o.user_id = s.user_id AND o.beatmap_md5 = s.beatmap_md5
+                      AND o.ruleset_id = s.ruleset_id AND o.variant = s.variant
+                      AND o.ranked_mods = 1 AND o.passed = 1
+                      AND (o.pp > s.pp OR (o.pp = s.pp AND o.id > s.id))) AS better_own,
+                   (SELECT COUNT(DISTINCT l.user_id) FROM lazer_scores l
+                    INNER JOIN users u ON u.id = l.user_id
+                    WHERE l.beatmap_md5 = s.beatmap_md5 AND l.ruleset_id = s.ruleset_id
+                      AND l.variant = s.variant AND l.ranked_mods = 1 AND l.passed = 1
+                      AND u.privileges & 1 > 0
+                      AND (l.pp > s.pp OR (l.pp = s.pp AND l.id > s.id))) AS ahead
+               FROM lazer_scores s
+               WHERE s.id = :id AND s.ranked_mods = 1 AND s.passed = 1""",
+            {"id": score_id},
+        )
+        if not row or row["better_own"]:
+            return None
+        return int(row["ahead"]) + 1
 
     async def list_with_beatmap(
         self,

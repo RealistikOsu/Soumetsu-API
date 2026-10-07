@@ -152,3 +152,85 @@ def test_lazer_variants_have_their_own_stats_tables() -> None:
 def test_custom_mode_range() -> None:
     assert is_valid_custom_mode(5)
     assert not is_valid_custom_mode(6)
+
+
+DETAIL_ROW = {
+    **LAZER_ROW,
+    "variant": 1,
+    "rank": "S",
+    "has_replay": 1,
+    "ranked_mods": 1,
+    "beatmap_id": 7,
+    "beatmap_set_id": 70,
+    "song_name": "Artist - Title [Insane]",
+    "creator": "Mapper",
+    "stars": 5.4,
+    "beatmap_mode": 0,
+    "beatmap_ranked": 2,
+    "username": "Player",
+    "country": "GB",
+    "privileges": 7,
+    "latest_activity": 1_700_000_500,
+}
+DETAIL_QUERY = "mu.username AS creator"
+RANK_QUERY = "AS better_own"
+
+
+def test_lazer_detail_row_keeps_stored_json() -> None:
+    detail = scores.lazer_detail_row_to_data(dict(DETAIL_ROW))
+
+    assert detail.statistics == {"great": 250, "ok": 10, "meh": 2, "miss": 1}
+    assert detail.mods == [{"acronym": "DT", "settings": {"speed_change": 1.3}}]
+    assert detail.accuracy == pytest.approx(98.75)
+    assert detail.has_replay
+    assert detail.beatmap is not None
+    assert detail.beatmap.beatmapset_id == 70
+    assert detail.player.last_active == 1_700_000_500
+
+
+def test_lazer_detail_row_without_beatmap() -> None:
+    detail = scores.lazer_detail_row_to_data({**DETAIL_ROW, "beatmap_set_id": None})
+
+    assert detail.beatmap is None
+
+
+class TestLazerDetail:
+    @pytest.mark.asyncio
+    async def test_hides_restricted_players(
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+    ) -> None:
+        mock_mysql.set_result(DETAIL_QUERY, {**DETAIL_ROW, "privileges": 2})
+
+        result = await scores_service.get_lazer_score(mock_context, 12)
+
+        assert result == scores_service.ScoreError.SCORE_NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_unknown_score_is_not_found(self, mock_context: MockContext) -> None:
+        result = await scores_service.get_lazer_score(mock_context, 12)
+
+        assert result == scores_service.ScoreError.SCORE_NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_rank_is_one_past_the_players_ahead(
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+    ) -> None:
+        mock_mysql.set_result(DETAIL_QUERY, dict(DETAIL_ROW))
+        mock_mysql.set_result(RANK_QUERY, {"better_own": 0, "ahead": 4})
+
+        result = await scores_service.get_lazer_score(mock_context, 12)
+
+        assert not isinstance(result, scores_service.ScoreError)
+        assert result.global_rank == 5
+
+    @pytest.mark.asyncio
+    async def test_no_rank_when_the_player_has_a_better_score(
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+    ) -> None:
+        mock_mysql.set_result(DETAIL_QUERY, dict(DETAIL_ROW))
+        mock_mysql.set_result(RANK_QUERY, {"better_own": 1, "ahead": 4})
+
+        result = await scores_service.get_lazer_score(mock_context, 12)
+
+        assert not isinstance(result, scores_service.ScoreError)
+        assert result.global_rank is None

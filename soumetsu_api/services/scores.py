@@ -8,6 +8,7 @@ from fastapi import status
 from soumetsu_api.constants import LAZER_VARIANTS
 from soumetsu_api.constants import is_valid_custom_mode
 from soumetsu_api.constants import is_valid_mode
+from soumetsu_api.resources.scores import LazerScoreDetailData
 from soumetsu_api.resources.scores import ScoreData
 from soumetsu_api.resources.scores import ScoreTopPlay
 from soumetsu_api.resources.scores import ScoreTopPlayWithMode
@@ -414,3 +415,22 @@ async def unpin_score(
 
     await ctx.scores.unpin_score(player_id, score_id)
     return None
+
+
+@dataclass
+class LazerScoreDetailResult:
+    score: LazerScoreDetailData
+    global_rank: int | None
+
+
+async def get_lazer_score(
+    ctx: AbstractContext, score_id: int
+) -> ScoreError.OnSuccess[LazerScoreDetailResult]:
+    score = await ctx.scores.find_lazer_detail(score_id)
+    if not score or privileges.is_restricted(
+        privileges.UserPrivileges(score.player.privileges)
+    ):
+        return ScoreError.SCORE_NOT_FOUND
+
+    global_rank = await ctx.scores.lazer_global_rank(score_id)
+    return LazerScoreDetailResult(score=score, global_rank=global_rank)

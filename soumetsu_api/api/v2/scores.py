@@ -12,8 +12,10 @@ from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.constants import CustomMode
 from soumetsu_api.constants import GameMode
 from soumetsu_api.services import scores
+from soumetsu_api.services.beatmaps import split_song
 from soumetsu_api.utilities.mods import Mod
 from soumetsu_api.utilities.mods import mods_from_score
+from soumetsu_api.utilities.privileges import UserPrivileges
 
 router = APIRouter()
 
@@ -340,3 +342,100 @@ async def get_player_pinned(
     result = response.unwrap(result)
 
     return response.create([to_response(s) for s in result])
+
+
+class LazerScoreBeatmapResponse(BaseModel):
+    beatmap_id: int
+    beatmapset_id: int
+    title: str
+    artist: str
+    version: str
+    creator: str | None
+    stars: float
+    mode: int
+    ranked: int
+
+
+class LazerScorePlayerResponse(BaseModel):
+    id: int
+    username: str
+    country: str
+    last_active: int
+    is_online: bool
+    privileges: int
+    is_supporter: bool
+
+
+class LazerScoreDetailResponse(BaseModel):
+    id: int
+    variant: int
+    play_mode: int
+    score: int
+    accuracy: float
+    max_combo: int
+    pp: float
+    rank: str
+    passed: bool
+    submitted_at: int
+    has_replay: bool
+    ranked_mods: bool
+    mods: list[Mod]
+    statistics: dict[str, int]
+    global_rank: int | None
+    beatmap: LazerScoreBeatmapResponse | None
+    player: LazerScorePlayerResponse
+
+
+@router.get(
+    "/lazer/scores/{score_id}",
+    response_model=response.BaseResponse[LazerScoreDetailResponse],
+)
+async def get_lazer_score(ctx: RequiresContext, score_id: int) -> Response:
+    result = await scores.get_lazer_score(ctx, score_id)
+    result = response.unwrap(result)
+    s = result.score
+
+    beatmap = None
+    if s.beatmap:
+        artist, title, version = split_song(s.beatmap.song_name)
+        beatmap = LazerScoreBeatmapResponse(
+            beatmap_id=s.beatmap.beatmap_id,
+            beatmapset_id=s.beatmap.beatmapset_id,
+            title=title,
+            artist=artist,
+            version=version,
+            creator=s.beatmap.creator,
+            stars=s.beatmap.stars,
+            mode=s.beatmap.mode,
+            ranked=s.beatmap.ranked,
+        )
+
+    return response.create(
+        LazerScoreDetailResponse(
+            id=s.id,
+            variant=s.variant,
+            play_mode=s.play_mode,
+            score=s.score,
+            accuracy=s.accuracy,
+            max_combo=s.max_combo,
+            pp=s.pp,
+            rank=s.rank,
+            passed=s.passed,
+            submitted_at=s.submitted_at,
+            has_replay=s.has_replay,
+            ranked_mods=s.ranked_mods,
+            mods=[Mod(**mod) for mod in s.mods],
+            statistics=s.statistics,
+            global_rank=result.global_rank,
+            beatmap=beatmap,
+            player=LazerScorePlayerResponse(
+                id=s.player.id,
+                username=s.player.username,
+                country=s.player.country,
+                last_active=s.player.last_active,
+                is_online=False,
+                privileges=s.player.privileges,
+                is_supporter=bool(s.player.privileges & UserPrivileges.DONOR),
+            ),
+        )
+    )
