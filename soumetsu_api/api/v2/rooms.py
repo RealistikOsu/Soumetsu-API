@@ -40,6 +40,7 @@ class DailyChallengeResponse(BaseModel):
     ruleset: int
     required_mods: list[ModResponse]
     participants: int
+    stable_participants: int
     top_10_score: int | None
     top_50_score: int | None
     room_id: int | None
@@ -127,10 +128,11 @@ async def get_daily_challenge(ctx: RequiresContext, day: date) -> Response:
 async def get_daily_scores(
     ctx: RequiresContext,
     day: date,
+    source: Literal["lazer", "stable"] = "lazer",
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
-    result = await rooms.get_daily_scores(ctx, day, page, limit)
+    result = await rooms.get_daily_scores(ctx, day, page, limit, source)
     result = response.unwrap(result)
 
     return response.create(ScoresResponse.model_validate(asdict(result)))

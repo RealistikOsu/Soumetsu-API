@@ -9,12 +9,15 @@ import pytest
 
 from soumetsu_api.api.v2.rooms import DailyChallengeResponse
 from soumetsu_api.api.v2.rooms import PlaylistDetailResponse
+from soumetsu_api.api.v2.rooms import ScoresResponse
 from soumetsu_api.resources.rooms import STATUS_FILTERS
 from soumetsu_api.resources.rooms import BestScoreData
 from soumetsu_api.resources.rooms import LadderData
 from soumetsu_api.resources.rooms import PercentileData
 from soumetsu_api.resources.rooms import RoomData
+from soumetsu_api.resources.rooms import _STABLE_PASSED
 from soumetsu_api.resources.rooms import RoomItemData
+from soumetsu_api.resources.rooms import StableLadderData
 from soumetsu_api.services import is_error
 from soumetsu_api.services import rooms
 from soumetsu_api.services.rooms import Mod
@@ -225,6 +228,7 @@ def test_daily_response_serialises_date() -> None:
         ruleset=0,
         required_mods=[],
         participants=0,
+        stable_participants=3,
         top_10_score=None,
         top_50_score=None,
         room_id=None,
@@ -236,6 +240,7 @@ def test_daily_response_serialises_date() -> None:
 
     assert dumped["date"] == "2026-10-01"
     assert dumped["top_10_score"] is None
+    assert dumped["stable_participants"] == 3
 
 
 @pytest.mark.asyncio
@@ -260,3 +265,80 @@ async def test_unknown_room_is_not_found() -> None:
     assert await rooms.get_playlist_item_scores(ctx, 404, 1, 1, 50) == (
         RoomsError.ROOM_NOT_FOUND
     )
+
+
+def stable_row(user_id: int, **overrides: int | float | str) -> StableLadderData:
+    fields = {
+        "user_id": user_id,
+        "username": f"player{user_id}",
+        "country": "GB",
+        "score": 1_000_000,
+        "accuracy": 98.7654,
+        "max_combo": 300,
+        "mods": 0,
+        "playback_rate": 1.0,
+        "count_300": 95,
+        "count_100": 5,
+        "count_50": 0,
+        "count_katus": 4,
+        "count_gekis": 20,
+        "count_misses": 0,
+        "plays": 2,
+    }
+    return StableLadderData(**(fields | overrides))
+
+
+def test_day_bounds_cover_one_utc_day() -> None:
+    start, end = rooms.day_bounds(date(2026, 10, 1))
+
+    assert start == int(datetime(2026, 10, 1, tzinfo=UTC).timestamp())
+    assert end - start == 86400
+    assert rooms.day_bounds(date(2026, 10, 2))[0] == end
+
+
+def test_shape_stable_scores() -> None:
+    scores = rooms.shape_stable_scores(
+        [stable_row(2), stable_row(1, accuracy=100.0, count_100=0, plays=1)],
+        ruleset=0,
+        offset=50,
+    )
+
+    assert [s.rank for s in scores] == [51, 52]
+    assert (scores[0].user.username, scores[0].play_count) == ("player2", 2)
+    assert (scores[0].accuracy, scores[0].max_combo) == (98.77, 300)
+    assert (scores[0].grade, scores[1].grade) == ("S", "SS")
+    assert scores[0].total_score == 1_000_000
+
+
+def test_stable_mods_use_the_shared_conversion() -> None:
+    [score] = rooms.shape_stable_scores(
+        [stable_row(1, mods=8, playback_rate=1.0)], ruleset=0, offset=0
+    )
+
+    assert score.mods == [Mod("CL", {}), Mod("HD", {})]
+    assert score.grade == "SH"
+
+
+def test_stable_queries_are_no_mod_only() -> None:
+    assert "s.mods = 0" in _STABLE_PASSED
+
+
+def test_stable_response_shape() -> None:
+    result = rooms.ScoresResult(
+        total=1,
+        scores=rooms.shape_stable_scores([stable_row(1)], ruleset=0, offset=0),
+    )
+
+    dumped = ScoresResponse.model_validate(asdict(result)).model_dump(mode="json")
+
+    assert dumped["total"] == 1
+    assert set(dumped["scores"][0]) == {
+        "rank",
+        "user",
+        "total_score",
+        "accuracy",
+        "max_combo",
+        "play_count",
+        "grade",
+        "mods",
+    }

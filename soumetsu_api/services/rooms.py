@@ -2,25 +2,32 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import UTC
 from datetime import date
 from datetime import datetime
+from datetime import timedelta
+from typing import Literal
 from typing import override
 
 from fastapi import status
 
+from soumetsu_api.resources.multiplayer import GameScoreData
 from soumetsu_api.resources.rooms import BestScoreData
 from soumetsu_api.resources.rooms import LadderData
 from soumetsu_api.resources.rooms import PercentileData
 from soumetsu_api.resources.rooms import RoomData
 from soumetsu_api.resources.rooms import RoomItemData
+from soumetsu_api.resources.rooms import StableLadderData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
+from soumetsu_api.services.multiplayer import grade_of
 from soumetsu_api.services.ranked_play import BeatmapRef
 from soumetsu_api.services.ranked_play import UserRef
 from soumetsu_api.services.ranked_play import as_utc
 from soumetsu_api.services.ranked_play import beatmap_ref
 from soumetsu_api.services.ranked_play import is_visible
 from soumetsu_api.services.ranked_play import user_ref
+from soumetsu_api.utilities.mods import mods_from_score
 
 
 class RoomsError(ServiceError):
@@ -69,6 +76,7 @@ class DailyChallengeResult:
     ruleset: int
     required_mods: list[Mod]
     participants: int
+    stable_participants: int
     top_10_score: int | None
     top_50_score: int | None
     room_id: int | None
@@ -190,6 +198,52 @@ def shape_scores(
     ]
 
 
+def day_bounds(day: date) -> tuple[int, int]:
+    start = datetime(day.year, day.month, day.day, tzinfo=UTC)
+    return int(start.timestamp()), int((start + timedelta(days=1)).timestamp())
+
+
+def shape_stable_scores(
+    ladder: list[StableLadderData],
+    ruleset: int,
+    offset: int,
+) -> list[DailyScore]:
+    return [
+        DailyScore(
+            rank=offset + position,
+            user=UserRef(id=row.user_id, username=row.username, country=row.country),
+            total_score=row.score,
+            accuracy=round(row.accuracy, 2),
+            max_combo=row.max_combo,
+            play_count=row.plays,
+            grade=grade_of(
+                ruleset,
+                GameScoreData(
+                    game=0,
+                    user_id=row.user_id,
+                    team=0,
+                    score=row.score,
+                    accuracy=row.accuracy,
+                    max_combo=row.max_combo,
+                    count_300=row.count_300,
+                    count_100=row.count_100,
+                    count_50=row.count_50,
+                    count_miss=row.count_misses,
+                    count_geki=row.count_gekis,
+                    count_katu=row.count_katus,
+                    mods=row.mods,
+                    passed=True,
+                ),
+            ),
+            mods=[
+                Mod(acronym=mod.acronym, settings=mod.settings or {})
+                for mod in mods_from_score(row.mods, row.playback_rate)
+            ],
+        )
+        for position, row in enumerate(ladder, start=1)
+    ]
+
+
 def build_summary(
     room: RoomData,
     host: UserRef | None,
@@ -258,6 +312,44 @@ async def _scores(
     return ScoresResult(total=total, scores=shape_scores(ladder, bests, offset))
 
 
+async def _stable_participants(
+    ctx: AbstractContext,
+    day: date,
+    beatmap_id: int,
+    ruleset: int,
+) -> int:
+    md5 = await ctx.rooms.find_beatmap_md5(beatmap_id)
+    if not md5:
+        return 0
+    start, end = day_bounds(day)
+    return await ctx.rooms.count_stable_players(md5, ruleset, start, end)
+
+
+async def _stable_scores(
+    ctx: AbstractContext,
+    day: date,
+    beatmap_id: int,
+    ruleset: int,
+    page: int,
+    limit: int,
+) -> ScoresResult:
+    md5 = await ctx.rooms.find_beatmap_md5(beatmap_id)
+    if not md5:
+        return ScoresResult(total=0, scores=[])
+
+    start, end = day_bounds(day)
+    offset = (page - 1) * limit
+    total = await ctx.rooms.count_stable_players(md5, ruleset, start, end)
+    if total <= offset:
+        return ScoresResult(total=total, scores=[])
+
+    ladder = await ctx.rooms.list_stable_ladder(md5, ruleset, start, end, limit, offset)
+    return ScoresResult(
+        total=total,
+        scores=shape_stable_scores(ladder, ruleset, offset),
+    )
+
+
 async def get_challenge_days(
     ctx: AbstractContext,
     year: int,
@@ -288,6 +380,9 @@ async def get_daily_challenge(
             ruleset=item.ruleset_id,
             required_mods=parse_mods(item.required_mods),
             participants=participants,
+            stable_participants=await _stable_participants(
+                ctx, day, item.beatmap_id, item.ruleset_id
+            ),
             top_10_score=top_10,
             top_50_score=top_50,
             room_id=room.id,
@@ -303,6 +398,9 @@ async def get_daily_challenge(
         ruleset=scheduled.ruleset_id,
         required_mods=[],
         participants=0,
+        stable_participants=await _stable_participants(
+            ctx, day, scheduled.beatmap_id, scheduled.ruleset_id
+        ),
         top_10_score=None,
         top_50_score=None,
         room_id=room.id if room else None,
@@ -314,14 +412,24 @@ async def get_daily_scores(
     day: date,
     page: int,
     limit: int,
+    source: Literal["lazer", "stable"] = "lazer",
 ) -> RoomsError.OnSuccess[ScoresResult]:
     room = await ctx.rooms.find_daily_room(day)
     items = await ctx.rooms.list_items([room.id]) if room else []
     if room and items:
+        if source == "stable":
+            return await _stable_scores(
+                ctx, day, items[0].beatmap_id, items[0].ruleset_id, page, limit
+            )
         return await _scores(ctx, room.id, items[0].item_id, page, limit)
 
-    if not await ctx.rooms.find_scheduled_beatmap(day):
+    scheduled = await ctx.rooms.find_scheduled_beatmap(day)
+    if not scheduled:
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
+    if source == "stable":
+        return await _stable_scores(
+            ctx, day, scheduled.beatmap_id, scheduled.ruleset_id, page, limit
+        )
     return ScoresResult(total=0, scores=[])
 
 

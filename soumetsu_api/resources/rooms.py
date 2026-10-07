@@ -69,6 +69,24 @@ class BestScoreData(BaseModel):
     created_at: datetime
 
 
+class StableLadderData(BaseModel):
+    user_id: int
+    username: str
+    country: str
+    score: int
+    accuracy: float
+    max_combo: int
+    mods: int
+    playback_rate: float
+    count_300: int
+    count_100: int
+    count_50: int
+    count_katus: int
+    count_gekis: int
+    count_misses: int
+    plays: int
+
+
 class PercentileData(BaseModel):
     n: int
     rn: int
@@ -79,6 +97,14 @@ class CountData(BaseModel):
     room_id: int
     room_item_id: int | None = None
     participants: int
+
+
+# "+ 0" on completed and play_mode keeps MySQL on the beatmap_md5 index instead of intersecting low-cardinality ones.
+# The daily challenge is no-mod, so stable plays with any mod bit set don't count.
+_STABLE_PASSED = """FROM scores s
+             INNER JOIN users u ON u.id = s.userid AND u.privileges & 1
+             WHERE s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode AND s.mods = 0
+               AND s.time >= :start AND s.time < :end AND s.completed + 0 >= 1"""
 
 
 class RoomsRepository:
@@ -254,3 +280,67 @@ class RoomsRepository:
             params,
         )
         return [BestScoreData(**row) for row in rows]
+
+    async def find_beatmap_md5(self, beatmap_id: int) -> str | None:
+        return await self._mysql.fetch_val(
+            "SELECT beatmap_md5 FROM beatmaps WHERE beatmap_id = :beatmap_id LIMIT 1",
+            {"beatmap_id": beatmap_id},
+        )
+
+    async def count_stable_players(
+        self,
+        md5: str,
+        mode: int,
+        start: int,
+        end: int,
+    ) -> int:
+        count = await self._mysql.fetch_val(
+            f"SELECT COUNT(DISTINCT s.userid) {_STABLE_PASSED}",
+            {"md5": md5, "mode": mode, "start": start, "end": end},
+        )
+        return count or 0
+
+    async def list_stable_ladder(
+        self,
+        md5: str,
+        mode: int,
+        start: int,
+        end: int,
+        limit: int,
+        offset: int,
+    ) -> list[StableLadderData]:
+        rows = await self._mysql.fetch_all(
+            """SELECT r.userid AS user_id, u.username, u.country, r.score, r.accuracy,
+                      r.max_combo, r.mods, r.playback_rate,
+                      r.`300_count` AS count_300, r.`100_count` AS count_100,
+                      r.`50_count` AS count_50, r.katus_count AS count_katus,
+                      r.gekis_count AS count_gekis, r.misses_count AS count_misses,
+                      r.plays
+               FROM (SELECT s.userid, s.score, s.accuracy, s.max_combo, s.mods,
+                            s.playback_rate, s.`300_count`, s.`100_count`, s.`50_count`,
+                            s.katus_count, s.gekis_count, s.misses_count, s.time,
+                            s.completed,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY s.userid
+                                ORDER BY (s.completed + 0 >= 1) DESC, s.score DESC,
+                                         s.time, s.id
+                            ) AS rn,
+                            COUNT(*) OVER (PARTITION BY s.userid) AS plays
+                     FROM scores s
+                     WHERE s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode
+                       AND s.mods = 0
+                       AND s.time >= :start AND s.time < :end) r
+               INNER JOIN users u ON u.id = r.userid AND u.privileges & 1
+               WHERE r.rn = 1 AND r.completed + 0 >= 1
+               ORDER BY r.score DESC, r.time, r.userid
+               LIMIT :limit OFFSET :offset""",
+            {
+                "md5": md5,
+                "mode": mode,
+                "start": start,
+                "end": end,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        return [StableLadderData(**row) for row in rows]
