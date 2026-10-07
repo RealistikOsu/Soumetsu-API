@@ -97,6 +97,7 @@ class ScheduleData(BaseModel):
     challenge_date: date
     # UTC, naive as MySQL returns them.
     starts_at: datetime | None = None
+    freemod: bool = False
 
 
 class CountData(BaseModel):
@@ -106,10 +107,15 @@ class CountData(BaseModel):
 
 
 # "+ 0" on completed and play_mode keeps MySQL on the beatmap_md5 index instead of intersecting low-cardinality ones.
-# The daily challenge is no-mod, so stable plays with any mod bit set don't count.
-_STABLE_PASSED = """FROM scores s
+# The daily challenge is no-mod, so stable plays with any mod bit set don't count. A freemod challenge also takes
+# NF, EZ, HD, HR, SD, FL, SO and PF; the speed mods, Relax and Autopilot never count.
+FREEMOD_MASK = 1 | 2 | 8 | 16 | 32 | 1024 | 4096 | 16384
+_MODS_ALLOWED = (
+    f"(s.mods = 0 OR (:freemod = 1 AND (s.mods | {FREEMOD_MASK}) = {FREEMOD_MASK}))"
+)
+_STABLE_PASSED = f"""FROM scores s
              INNER JOIN users u ON u.id = s.userid AND u.privileges & 1
-             WHERE s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode AND s.mods = 0
+             WHERE s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode AND {_MODS_ALLOWED}
                AND s.time >= :start AND s.time < :end AND s.completed + 0 >= 1"""
 
 
@@ -121,7 +127,7 @@ class RoomsRepository:
 
     async def list_scheduled(self, start: date, end: date) -> list[ScheduleData]:
         rows = await self._mysql.fetch_all(
-            """SELECT challenge_date, starts_at FROM lazer_daily_challenges
+            """SELECT challenge_date, starts_at, freemod FROM lazer_daily_challenges
                WHERE challenge_date >= :start AND challenge_date < :end
                ORDER BY challenge_date""",
             {"start": start, "end": end},
@@ -130,7 +136,7 @@ class RoomsRepository:
 
     async def find_schedule(self, day: date) -> ScheduleData | None:
         row = await self._mysql.fetch_one(
-            """SELECT challenge_date, starts_at FROM lazer_daily_challenges
+            """SELECT challenge_date, starts_at, freemod FROM lazer_daily_challenges
                WHERE challenge_date = :day""",
             {"day": day},
         )
@@ -307,10 +313,17 @@ class RoomsRepository:
         mode: int,
         start: int,
         end: int,
+        freemod: bool,
     ) -> int:
         count = await self._mysql.fetch_val(
             f"SELECT COUNT(DISTINCT s.userid) {_STABLE_PASSED}",
-            {"md5": md5, "mode": mode, "start": start, "end": end},
+            {
+                "md5": md5,
+                "mode": mode,
+                "start": start,
+                "end": end,
+                "freemod": int(freemod),
+            },
         )
         return count or 0
 
@@ -320,6 +333,7 @@ class RoomsRepository:
         mode: int,
         start: int,
         end: int,
+        freemod: bool,
     ) -> list[PercentileData]:
         rows = await self._mysql.fetch_all(
             f"""SELECT r.n, r.rn, r.best
@@ -329,7 +343,13 @@ class RoomsRepository:
                       FROM (SELECT s.userid, MAX(s.score) AS best {_STABLE_PASSED}
                             GROUP BY s.userid) g) r
                 WHERE r.rn IN (CEIL(r.n / 10), CEIL(r.n / 2))""",
-            {"md5": md5, "mode": mode, "start": start, "end": end},
+            {
+                "md5": md5,
+                "mode": mode,
+                "start": start,
+                "end": end,
+                "freemod": int(freemod),
+            },
         )
         return [PercentileData(**row) for row in rows]
 
@@ -339,11 +359,12 @@ class RoomsRepository:
         mode: int,
         start: int,
         end: int,
+        freemod: bool,
         limit: int,
         offset: int,
     ) -> list[StableLadderData]:
         rows = await self._mysql.fetch_all(
-            """SELECT r.userid AS user_id, u.username, u.country, r.score, r.accuracy,
+            f"""SELECT r.userid AS user_id, u.username, u.country, r.score, r.accuracy,
                       r.max_combo, r.mods, r.playback_rate,
                       r.`300_count` AS count_300, r.`100_count` AS count_100,
                       r.`50_count` AS count_50, r.katus_count AS count_katus,
@@ -361,7 +382,7 @@ class RoomsRepository:
                             COUNT(*) OVER (PARTITION BY s.userid) AS plays
                      FROM scores s
                      WHERE s.beatmap_md5 = :md5 AND s.play_mode + 0 = :mode
-                       AND s.mods = 0
+                       AND {_MODS_ALLOWED}
                        AND s.time >= :start AND s.time < :end) r
                INNER JOIN users u ON u.id = r.userid AND u.privileges & 1
                WHERE r.rn = 1 AND r.completed + 0 >= 1
@@ -372,6 +393,7 @@ class RoomsRepository:
                 "mode": mode,
                 "start": start,
                 "end": end,
+                "freemod": int(freemod),
                 "limit": limit,
                 "offset": offset,
             },

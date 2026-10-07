@@ -228,6 +228,7 @@ def test_daily_response_serialises_date() -> None:
         date=date(2026, 10, 1),
         starts_at=window[0],
         ends_at=window[1],
+        freemod=False,
         beatmap=rooms.beatmap_ref(make_item(1, 5.0)),
         ruleset=0,
         required_mods=[],
@@ -334,7 +335,7 @@ async def test_a_challenge_stays_secret_until_its_own_start() -> None:
     now = datetime.now(UTC)
     mysql = MockMySQLAdapter()
     mysql.set_result(
-        "starts_at FROM lazer_daily_challenges",
+        "starts_at, freemod FROM lazer_daily_challenges",
         {
             "challenge_date": now.date(),
             "starts_at": (now + timedelta(hours=2)).replace(tzinfo=None),
@@ -346,6 +347,25 @@ async def test_a_challenge_stays_secret_until_its_own_start() -> None:
     assert await rooms.get_daily_challenge(ctx, now.date()) == (
         RoomsError.DAILY_CHALLENGE_NOT_FOUND
     )
+
+
+@pytest.mark.asyncio
+async def test_rules_follow_the_schedule() -> None:
+    day = date(2026, 10, 3)
+    mysql = MockMySQLAdapter()
+    mysql.set_result(
+        "starts_at, freemod FROM lazer_daily_challenges",
+        {"challenge_date": day, "starts_at": datetime(2026, 10, 3, 18), "freemod": 1},
+    )
+    window, freemod = await rooms.challenge_rules(MockContext(mysql), day)
+
+    assert freemod is True
+    assert window[0] == datetime(2026, 10, 3, 18, tzinfo=UTC)
+
+    window, freemod = await rooms.challenge_rules(MockContext(MockMySQLAdapter()), day)
+
+    assert freemod is False
+    assert window == rooms.window_of(day)
 
 
 @pytest.mark.asyncio
@@ -412,6 +432,7 @@ def test_stable_mods_use_the_shared_conversion() -> None:
 
 def test_stable_queries_are_no_mod_only() -> None:
     assert "s.mods = 0" in _STABLE_PASSED
+    assert ":freemod = 1" in _STABLE_PASSED
 
 
 def test_stable_response_shape() -> None:
