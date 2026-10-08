@@ -191,7 +191,7 @@ class UserRepository:
         old_username_safe = safe_username(old_username)
 
         await self._mysql.execute(
-            """INSERT INTO user_name_history (user_id, previous_username, previous_username_safe, changed_datetime)
+            """INSERT INTO user_name_history (user_id, username, username_safe, replaced_at)
                VALUES (:user_id, :old_username, :old_username_safe, UNIX_TIMESTAMP())""",
             {
                 "user_id": user_id,
