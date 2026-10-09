@@ -28,6 +28,10 @@ def _beatmap_columns(ruleset: str) -> str:
                        mu.username AS creator"""
 
 
+# Read apart from the beatmap join, which skips unsubmitted maps, so stable plays count whatever the status.
+_BEATMAP_MD5 = "(SELECT m.beatmap_md5 FROM beatmaps m WHERE m.beatmap_id = {}.beatmap_id) AS beatmap_md5"
+
+
 def _beatmap_joins(beatmap: str) -> str:
     return f"""LEFT JOIN beatmaps b ON b.beatmap_id = {beatmap} AND b.ranked != -1
                 LEFT JOIN users mu ON mu.id = b.mapper_id"""
@@ -49,6 +53,7 @@ class RoomItemData(RoundBeatmapData):
     required_mods: str
     allowed_mods: str
     expired: bool
+    beatmap_md5: str | None = None
 
 
 class LadderData(BaseModel):
@@ -100,6 +105,10 @@ class ScheduleData(BaseModel):
     freemod: bool = False
 
 
+class ChallengeData(ScheduleData, RoundBeatmapData):
+    beatmap_md5: str | None = None
+
+
 class CountData(BaseModel):
     room_id: int
     room_item_id: int | None = None
@@ -115,7 +124,9 @@ _PLAY_COLUMNS = (
 
 # The plays on the map inside the window, as a table to select from. A freemod challenge takes every play whatever
 # its mods, from the vanilla, relax and autopilot tables alike, while the others take vanilla plays without mods.
-# "+ 0" on completed and play_mode keeps MySQL on the beatmap_md5 index instead of intersecting low-cardinality ones.
+# "+ 0" on completed and play_mode keeps MySQL on the (beatmap_md5, time) index instead of intersecting
+# low-cardinality ones. scores.time is a VARCHAR of unix seconds, so the bounds go in as strings: compared with
+# numbers it is cast on every row and the index can't narrow down the window.
 def _stable_plays(freemod: bool, passed_only: bool) -> str:
     tables = ("scores", "scores_relax", "scores_ap") if freemod else ("scores",)
     where = (
@@ -130,6 +141,10 @@ def _stable_plays(freemod: bool, passed_only: bool) -> str:
         f"SELECT {_PLAY_COLUMNS} FROM {table} s WHERE {where}" for table in tables
     )
     return "(" + " UNION ALL ".join(selects) + ")"
+
+
+def _window_values(md5: str, mode: int, start: int, end: int) -> dict[str, object]:
+    return {"md5": md5, "mode": mode, "start": str(start), "end": str(end)}
 
 
 def _stable_passed(freemod: bool) -> str:
@@ -152,24 +167,17 @@ class RoomsRepository:
         )
         return [ScheduleData(**row) for row in rows]
 
-    async def find_schedule(self, day: date) -> ScheduleData | None:
+    async def find_challenge(self, day: date) -> ChallengeData | None:
         row = await self._mysql.fetch_one(
-            """SELECT challenge_date, starts_at, freemod FROM lazer_daily_challenges
-               WHERE challenge_date = :day""",
-            {"day": day},
-        )
-        return ScheduleData(**row) if row else None
-
-    async def find_scheduled_beatmap(self, day: date) -> RoundBeatmapData | None:
-        row = await self._mysql.fetch_one(
-            f"""SELECT d.beatmap_id, COALESCE(b.mode, 0) AS ruleset_id,
-                       {_beatmap_columns("b.mode")}
+            f"""SELECT d.challenge_date, d.starts_at, d.freemod,
+                       d.beatmap_id, COALESCE(b.mode, 0) AS ruleset_id,
+                       {_beatmap_columns("b.mode")}, {_BEATMAP_MD5.format("d")}
                 FROM lazer_daily_challenges d
                 {_beatmap_joins("d.beatmap_id")}
                 WHERE d.challenge_date = :day""",
             {"day": day},
         )
-        return RoundBeatmapData(**row) if row else None
+        return ChallengeData(**row) if row else None
 
     async def find_room(self, room_id: int) -> RoomData | None:
         row = await self._mysql.fetch_one(
@@ -218,7 +226,7 @@ class RoomsRepository:
         rows = await self._mysql.fetch_all(
             f"""SELECT i.room_id, i.item_id, i.beatmap_id, i.ruleset_id,
                        i.required_mods, i.allowed_mods, i.expired,
-                       {_beatmap_columns("i.ruleset_id")}
+                       {_beatmap_columns("i.ruleset_id")}, {_BEATMAP_MD5.format("i")}
                 FROM lazer_room_items i
                 {_beatmap_joins("i.beatmap_id")}
                 WHERE i.room_id IN ({names})
@@ -319,12 +327,6 @@ class RoomsRepository:
         )
         return [BestScoreData(**row) for row in rows]
 
-    async def find_beatmap_md5(self, beatmap_id: int) -> str | None:
-        return await self._mysql.fetch_val(
-            "SELECT beatmap_md5 FROM beatmaps WHERE beatmap_id = :beatmap_id LIMIT 1",
-            {"beatmap_id": beatmap_id},
-        )
-
     async def count_stable_players(
         self,
         md5: str,
@@ -335,7 +337,7 @@ class RoomsRepository:
     ) -> int:
         count = await self._mysql.fetch_val(
             f"SELECT COUNT(DISTINCT s.userid) {_stable_passed(freemod)}",
-            {"md5": md5, "mode": mode, "start": start, "end": end},
+            _window_values(md5, mode, start, end),
         )
         return count or 0
 
@@ -355,7 +357,7 @@ class RoomsRepository:
                       FROM (SELECT s.userid, MAX(s.score) AS best {_stable_passed(freemod)}
                             GROUP BY s.userid) g) r
                 WHERE r.rn IN (CEIL(r.n / 10), CEIL(r.n / 2))""",
-            {"md5": md5, "mode": mode, "start": start, "end": end},
+            _window_values(md5, mode, start, end),
         )
         return [PercentileData(**row) for row in rows]
 
@@ -391,13 +393,6 @@ class RoomsRepository:
                WHERE r.rn = 1 AND r.completed + 0 >= 1
                ORDER BY r.score DESC, r.time, r.userid
                LIMIT :limit OFFSET :offset""",
-            {
-                "md5": md5,
-                "mode": mode,
-                "start": start,
-                "end": end,
-                "limit": limit,
-                "offset": offset,
-            },
+            _window_values(md5, mode, start, end) | {"limit": limit, "offset": offset},
         )
         return [StableLadderData(**row) for row in rows]

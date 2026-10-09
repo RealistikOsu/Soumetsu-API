@@ -12,6 +12,7 @@ from soumetsu_api.api.v2.rooms import DailyChallengeResponse
 from soumetsu_api.api.v2.rooms import PlaylistDetailResponse
 from soumetsu_api.api.v2.rooms import ScoresResponse
 from soumetsu_api.resources.rooms import _stable_plays
+from soumetsu_api.resources.rooms import _window_values
 from soumetsu_api.resources.rooms import STATUS_FILTERS
 from soumetsu_api.resources.rooms import BestScoreData
 from soumetsu_api.resources.rooms import LadderData
@@ -56,6 +57,19 @@ def make_item(
         allowed_mods="[]",
         expired=False,
     )
+
+
+def challenge_row(day: date, **overrides: object) -> dict[str, object]:
+    return {
+        "challenge_date": day,
+        "beatmap_id": 1,
+        "ruleset_id": 0,
+        "beatmapset_id": None,
+        "song_name": None,
+        "ranked": None,
+        "stars": None,
+        "creator": None,
+    } | overrides
 
 
 def ladder_rows(count: int) -> list[PercentileData]:
@@ -276,10 +290,10 @@ async def test_unknown_day_is_not_found() -> None:
 
 @pytest.mark.asyncio
 async def test_future_days_stay_secret_even_when_scheduled() -> None:
-    mysql = MockMySQLAdapter()
-    mysql.set_result("FROM lazer_daily_challenges d", {"beatmap_id": 1})
-    ctx = MockContext(mysql)
     tomorrow = datetime.now(UTC).date() + timedelta(days=1)
+    mysql = MockMySQLAdapter()
+    mysql.set_result("FROM lazer_daily_challenges d", challenge_row(tomorrow))
+    ctx = MockContext(mysql)
 
     assert await rooms.get_daily_challenge(ctx, tomorrow) == (
         RoomsError.DAILY_CHALLENGE_NOT_FOUND
@@ -335,13 +349,11 @@ async def test_a_challenge_stays_secret_until_its_own_start() -> None:
     now = datetime.now(UTC)
     mysql = MockMySQLAdapter()
     mysql.set_result(
-        "starts_at, freemod FROM lazer_daily_challenges",
-        {
-            "challenge_date": now.date(),
-            "starts_at": (now + timedelta(hours=2)).replace(tzinfo=None),
-        },
+        "FROM lazer_daily_challenges d",
+        challenge_row(
+            now.date(), starts_at=(now + timedelta(hours=2)).replace(tzinfo=None)
+        ),
     )
-    mysql.set_result("FROM lazer_daily_challenges d", {"beatmap_id": 1})
     ctx = MockContext(mysql)
 
     assert await rooms.get_daily_challenge(ctx, now.date()) == (
@@ -354,15 +366,16 @@ async def test_rules_follow_the_schedule() -> None:
     day = date(2026, 10, 3)
     mysql = MockMySQLAdapter()
     mysql.set_result(
-        "starts_at, freemod FROM lazer_daily_challenges",
-        {"challenge_date": day, "starts_at": datetime(2026, 10, 3, 18), "freemod": 1},
+        "FROM lazer_daily_challenges d",
+        challenge_row(day, starts_at=datetime(2026, 10, 3, 18), freemod=1),
     )
-    window, freemod = await rooms.challenge_rules(MockContext(mysql), day)
+    challenge = await MockContext(mysql).rooms.find_challenge(day)
+    window, freemod = rooms.challenge_rules(day, challenge)
 
     assert freemod is True
     assert window[0] == datetime(2026, 10, 3, 18, tzinfo=UTC)
 
-    window, freemod = await rooms.challenge_rules(MockContext(MockMySQLAdapter()), day)
+    window, freemod = rooms.challenge_rules(day, None)
 
     assert freemod is False
     assert window == rooms.window_of(day)
@@ -444,6 +457,12 @@ def test_a_freemod_challenge_takes_every_mod_from_every_board() -> None:
     assert all(
         table in plays for table in ("scores s", "scores_relax s", "scores_ap s")
     )
+
+
+def test_stable_window_bounds_compare_as_text() -> None:
+    values = _window_values("abc", 0, 1789920000, 1790006400)
+
+    assert (values["start"], values["end"]) == ("1789920000", "1790006400")
 
 
 def test_stable_response_shape() -> None:

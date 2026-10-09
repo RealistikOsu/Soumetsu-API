@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from datetime import UTC
@@ -13,6 +14,7 @@ from fastapi import status
 
 from soumetsu_api.resources.multiplayer import GameScoreData
 from soumetsu_api.resources.rooms import BestScoreData
+from soumetsu_api.resources.rooms import ChallengeData
 from soumetsu_api.resources.rooms import LadderData
 from soumetsu_api.resources.rooms import PercentileData
 from soumetsu_api.resources.rooms import RoomData
@@ -182,11 +184,10 @@ def window_of(day: date, starts_at: datetime | None = None) -> Window:
 
 
 # When a challenge runs and whether it is freemod, which also lets stable plays with the allowed mods count.
-async def challenge_rules(ctx: AbstractContext, day: date) -> tuple[Window, bool]:
-    schedule = await ctx.rooms.find_schedule(day)
-    if not schedule:
+def challenge_rules(day: date, challenge: ChallengeData | None) -> tuple[Window, bool]:
+    if not challenge:
         return window_of(day), False
-    return window_of(day, schedule.starts_at), schedule.freemod
+    return window_of(day, challenge.starts_at), challenge.freemod
 
 
 # A challenge's map is a secret until its window opens, even once it has been scheduled.
@@ -337,8 +338,10 @@ async def _scores(
     limit: int,
 ) -> ScoresResult:
     offset = (page - 1) * limit
-    total = await ctx.rooms.count_ladder(room_id, item_id)
-    ladder = await ctx.rooms.list_ladder(room_id, item_id, limit, offset)
+    total, ladder = await asyncio.gather(
+        ctx.rooms.count_ladder(room_id, item_id),
+        ctx.rooms.list_ladder(room_id, item_id, limit, offset),
+    )
     bests = await ctx.rooms.list_best_scores(
         room_id,
         item_id,
@@ -351,10 +354,9 @@ async def _stable_summary(
     ctx: AbstractContext,
     window: Window,
     freemod: bool,
-    beatmap_id: int,
+    md5: str | None,
     ruleset: int,
 ) -> tuple[int, int | None, int | None]:
-    md5 = await ctx.rooms.find_beatmap_md5(beatmap_id)
     if not md5:
         return 0, None, None
     start, end = window_bounds(window)
@@ -367,23 +369,19 @@ async def _stable_scores(
     ctx: AbstractContext,
     window: Window,
     freemod: bool,
-    beatmap_id: int,
+    md5: str | None,
     ruleset: int,
     page: int,
     limit: int,
 ) -> ScoresResult:
-    md5 = await ctx.rooms.find_beatmap_md5(beatmap_id)
     if not md5:
         return ScoresResult(total=0, scores=[])
 
     start, end = window_bounds(window)
     offset = (page - 1) * limit
-    total = await ctx.rooms.count_stable_players(md5, ruleset, start, end, freemod)
-    if total <= offset:
-        return ScoresResult(total=total, scores=[])
-
-    ladder = await ctx.rooms.list_stable_ladder(
-        md5, ruleset, start, end, freemod, limit, offset
+    total, ladder = await asyncio.gather(
+        ctx.rooms.count_stable_players(md5, ruleset, start, end, freemod),
+        ctx.rooms.list_stable_ladder(md5, ruleset, start, end, freemod, limit, offset),
     )
     return ScoresResult(
         total=total,
@@ -407,25 +405,45 @@ async def get_challenge_days(
     )
 
 
+@dataclass
+class _Daily:
+    window: Window
+    freemod: bool
+    challenge: ChallengeData | None
+    room: RoomData | None
+    item: RoomItemData | None
+
+
+async def _find_daily(ctx: AbstractContext, day: date) -> _Daily | None:
+    challenge, room = await asyncio.gather(
+        ctx.rooms.find_challenge(day),
+        ctx.rooms.find_daily_room(day),
+    )
+    window, freemod = challenge_rules(day, challenge)
+    if not has_started(window):
+        return None
+
+    items = await ctx.rooms.list_items([room.id]) if room else []
+    return _Daily(window, freemod, challenge, room, items[0] if items else None)
+
+
 async def get_daily_challenge(
     ctx: AbstractContext,
     day: date,
 ) -> RoomsError.OnSuccess[DailyChallengeResult]:
-    window, freemod = await challenge_rules(ctx, day)
-    if not has_started(window):
+    daily = await _find_daily(ctx, day)
+    if not daily:
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
+    window, freemod = daily.window, daily.freemod
 
-    room = await ctx.rooms.find_daily_room(day)
-    items = await ctx.rooms.list_items([room.id]) if room else []
-
-    if room and items:
-        item = items[0]
-        participants, top_10, top_50 = pick_percentiles(
-            await ctx.rooms.list_percentiles(room.id, item.item_id),
+    if daily.room and daily.item:
+        room, item = daily.room, daily.item
+        lazer, stable = await asyncio.gather(
+            ctx.rooms.list_percentiles(room.id, item.item_id),
+            _stable_summary(ctx, window, freemod, item.beatmap_md5, item.ruleset_id),
         )
-        stable_players, stable_10, stable_50 = await _stable_summary(
-            ctx, window, freemod, item.beatmap_id, item.ruleset_id
-        )
+        participants, top_10, top_50 = pick_percentiles(lazer)
+        stable_players, stable_10, stable_50 = stable
         return DailyChallengeResult(
             date=day,
             starts_at=window[0],
@@ -443,12 +461,12 @@ async def get_daily_challenge(
             room_id=room.id,
         )
 
-    scheduled = await ctx.rooms.find_scheduled_beatmap(day)
+    scheduled = daily.challenge
     if not scheduled:
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
 
     stable_players, stable_10, stable_50 = await _stable_summary(
-        ctx, window, freemod, scheduled.beatmap_id, scheduled.ruleset_id
+        ctx, window, freemod, scheduled.beatmap_md5, scheduled.ruleset_id
     )
     return DailyChallengeResult(
         date=day,
@@ -464,7 +482,7 @@ async def get_daily_challenge(
         stable_top_50_score=stable_50,
         top_10_score=None,
         top_50_score=None,
-        room_id=room.id if room else None,
+        room_id=daily.room.id if daily.room else None,
     )
 
 
@@ -475,34 +493,32 @@ async def get_daily_scores(
     limit: int,
     source: Literal["lazer", "stable"] = "lazer",
 ) -> RoomsError.OnSuccess[ScoresResult]:
-    window, freemod = await challenge_rules(ctx, day)
-    if not has_started(window):
+    daily = await _find_daily(ctx, day)
+    if not daily:
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
 
-    room = await ctx.rooms.find_daily_room(day)
-    items = await ctx.rooms.list_items([room.id]) if room else []
-    if room and items:
+    if daily.room and daily.item:
         if source == "stable":
             return await _stable_scores(
                 ctx,
-                window,
-                freemod,
-                items[0].beatmap_id,
-                items[0].ruleset_id,
+                daily.window,
+                daily.freemod,
+                daily.item.beatmap_md5,
+                daily.item.ruleset_id,
                 page,
                 limit,
             )
-        return await _scores(ctx, room.id, items[0].item_id, page, limit)
+        return await _scores(ctx, daily.room.id, daily.item.item_id, page, limit)
 
-    scheduled = await ctx.rooms.find_scheduled_beatmap(day)
+    scheduled = daily.challenge
     if not scheduled:
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
     if source == "stable":
         return await _stable_scores(
             ctx,
-            window,
-            freemod,
-            scheduled.beatmap_id,
+            daily.window,
+            daily.freemod,
+            scheduled.beatmap_md5,
             scheduled.ruleset_id,
             page,
             limit,
