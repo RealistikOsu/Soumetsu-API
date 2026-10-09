@@ -87,6 +87,7 @@ class DailyChallengeResult:
     top_10_score: int | None
     top_50_score: int | None
     room_id: int | None
+    theme: str | None = None
 
 
 @dataclass
@@ -459,6 +460,7 @@ async def get_daily_challenge(
             top_10_score=top_10,
             top_50_score=top_50,
             room_id=room.id,
+            theme=daily.challenge.theme if daily.challenge else None,
         )
 
     scheduled = daily.challenge
@@ -483,6 +485,7 @@ async def get_daily_challenge(
         top_10_score=None,
         top_50_score=None,
         room_id=daily.room.id if daily.room else None,
+        theme=scheduled.theme,
     )
 
 

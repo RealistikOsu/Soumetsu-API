@@ -49,6 +49,7 @@ class DailyChallengeResponse(BaseModel):
     top_10_score: int | None
     top_50_score: int | None
     room_id: int | None
+    theme: str | None = None
 
 
 class DailyScoreResponse(BaseModel):

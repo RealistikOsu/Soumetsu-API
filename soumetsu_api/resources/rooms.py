@@ -107,6 +107,7 @@ class ScheduleData(BaseModel):
 
 class ChallengeData(ScheduleData, RoundBeatmapData):
     beatmap_md5: str | None = None
+    theme: str | None = None
 
 
 class CountData(BaseModel):
@@ -169,7 +170,7 @@ class RoomsRepository:
 
     async def find_challenge(self, day: date) -> ChallengeData | None:
         row = await self._mysql.fetch_one(
-            f"""SELECT d.challenge_date, d.starts_at, d.freemod,
+            f"""SELECT d.challenge_date, d.starts_at, d.freemod, d.theme,
                        d.beatmap_id, COALESCE(b.mode, 0) AS ruleset_id,
                        {_beatmap_columns("b.mode")}, {_BEATMAP_MD5.format("d")}
                 FROM lazer_daily_challenges d

@@ -253,6 +253,7 @@ def test_daily_response_serialises_date() -> None:
         top_10_score=None,
         top_50_score=None,
         room_id=None,
+        theme="highlights from september 2026",
     )
 
     dumped = DailyChallengeResponse.model_validate(asdict(result)).model_dump(
@@ -263,6 +264,7 @@ def test_daily_response_serialises_date() -> None:
     assert dumped["starts_at"] == "2026-10-01T00:00:00Z"
     assert dumped["ends_at"] == "2026-10-02T00:00:00Z"
     assert dumped["top_10_score"] is None
+    assert dumped["theme"] == "highlights from september 2026"
     assert dumped["stable_participants"] == 3
     assert dumped["stable_top_10_score"] == 900000
     assert dumped["stable_top_50_score"] == 400000
