@@ -250,15 +250,15 @@ class BeatmapsRepository:
         scores_tables = ["scores", "scores_relax", "scores_ap"]
         scores_table = scores_tables[custom_mode]
 
-        # Counting first and joining only the page's beatmaps keeps this fast. The "+ 0" stops MySQL from
+        # Counting first and joining only the page's beatmaps keeps this fast. NO_INDEX_MERGE stops MySQL from
         # intersecting the userid and play_mode indexes, which made it scan far more rows (over a second
-        # for an active player) than walking that player's scores by userid alone.
+        # for an active player) than walking that player's own scores.
         rows = await self._mysql.fetch_all(
             f"""SELECT b.beatmap_id, b.beatmapset_id, b.song_name, t.playcount
                 FROM (
-                    SELECT beatmap_md5, COUNT(*) AS playcount
+                    SELECT /*+ NO_INDEX_MERGE({scores_table}) */ beatmap_md5, COUNT(*) AS playcount
                     FROM {scores_table}
-                    WHERE userid = :user_id AND play_mode + 0 = :mode
+                    WHERE userid = :user_id AND play_mode = :mode
                     GROUP BY beatmap_md5
                     ORDER BY playcount DESC
                     LIMIT :limit OFFSET :offset

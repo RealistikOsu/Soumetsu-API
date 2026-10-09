@@ -101,10 +101,9 @@ class TestRepository:
             "song_name": "Artist - Title [Insane]",
             "difficulty": 5.4,
             "ranked": 2,
-            "rn": 1,
         }
         mysql = RecordingMySQL()
-        mysql.set_result("ROW_NUMBER()", [row])
+        mysql.set_result("NOT EXISTS", [row])
 
         best = await scores.ScoresRepository(mysql).list_player_best(5, 0, custom_mode)
 

@@ -280,11 +280,9 @@ class ScoresRepository:
     def _get_table(self, custom_mode: int) -> str:
         return SCORE_TABLES[custom_mode]
 
-    # Queries for one player's scores write "play_mode + 0" (and the same for completed) on purpose: it keeps
-    # MySQL from intersecting those low-cardinality indexes with userid, which scanned far more rows than
-    # walking the player's own scores and made profile lists take most of a second. Top plays order by
-    # "pp + 0" for the same reason: with a small LIMIT, ordering by plain pp let MySQL walk the pp index
-    # across every player's scores looking for this one's, which took several seconds for some profiles.
+    # Queries for one player's scores use NO_INDEX_MERGE: otherwise MySQL intersects the single-column
+    # userid, play_mode and completed indexes, which scans far more rows than walking the player's own
+    # (userid, play_mode, ...) indexes and made profile lists take most of a second.
 
     async def find_by_id(
         self,
@@ -463,7 +461,8 @@ class ScoresRepository:
         diff_col = DIFFICULTY_COLUMNS[mode]
 
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
+            SELECT /*+ NO_INDEX_MERGE(s) */
+                   s.id, s.beatmap_md5, s.userid as player_id, s.score,
                    s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
@@ -474,10 +473,10 @@ class ScoresRepository:
             FROM {table} s
             INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
             WHERE s.userid = :player_id
-            AND s.play_mode + 0 = :mode
-            AND s.completed + 0 = 3
+            AND s.play_mode = :mode
+            AND s.completed = 3
             AND b.ranked = 2
-            ORDER BY s.pp + 0 DESC
+            ORDER BY s.pp DESC, s.id DESC
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
@@ -518,19 +517,22 @@ class ScoresRepository:
         self, player_id: int, mode: int, variant: int, limit: int, offset: int
     ) -> list[ScoreWithBeatmap]:
         rows = await self._mysql.fetch_all(
-            f"""SELECT * FROM (
-                    SELECT {LAZER_SCORE_COLUMNS}, {_lazer_beatmap_columns(mode)},
-                           ROW_NUMBER() OVER (
-                               PARTITION BY l.beatmap_md5 ORDER BY l.pp DESC, l.id DESC
-                           ) AS rn
-                    FROM lazer_scores l
-                    INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
-                    WHERE l.user_id = :player_id AND l.ruleset_id = :mode
-                      AND l.variant = :variant AND l.ranked_mods = 1 AND l.passed = 1
-                      AND l.pp > 0 AND b.ranked IN (2, 3)
-                ) best
-                WHERE best.rn = 1
-                ORDER BY best.pp DESC
+            # A play is the player's best on its map when no other play of theirs beats it, so this walks their
+            # plays in pp order and stops at the page instead of ranking every one of them first.
+            f"""SELECT {LAZER_SCORE_COLUMNS}, {_lazer_beatmap_columns(mode)}
+                FROM lazer_scores l
+                INNER JOIN beatmaps b ON l.beatmap_md5 = b.beatmap_md5
+                WHERE l.user_id = :player_id AND l.ruleset_id = :mode
+                  AND l.variant = :variant AND l.ranked_mods = 1 AND l.passed = 1
+                  AND l.pp > 0 AND b.ranked IN (2, 3)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM lazer_scores l2
+                      WHERE l2.user_id = l.user_id AND l2.beatmap_md5 = l.beatmap_md5
+                        AND l2.ruleset_id = l.ruleset_id AND l2.variant = l.variant
+                        AND l2.ranked_mods = 1 AND l2.passed = 1
+                        AND (l2.pp > l.pp OR (l2.pp = l.pp AND l2.id > l.id))
+                  )
+                ORDER BY l.pp DESC, l.id DESC
                 LIMIT :limit OFFSET :offset""",
             {
                 "player_id": player_id,
@@ -661,7 +663,7 @@ class ScoresRepository:
         table = self._get_table(custom_mode)
         # IDs follow submission order, and sorting by them walks the index instead of sorting every one of
         # the player's scores by time.
-        passed_only = "AND s.completed + 0 >= 1" if exclude_failed else ""
+        passed_only = "AND s.completed >= 1" if exclude_failed else ""
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",
@@ -670,7 +672,7 @@ class ScoresRepository:
         ][mode]
 
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
+            SELECT /*+ NO_INDEX_MERGE(s) */ s.id, s.beatmap_md5, s.userid as player_id, s.score,
                    s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
@@ -681,7 +683,7 @@ class ScoresRepository:
             FROM {table} s
             INNER JOIN beatmaps b ON s.beatmap_md5 = b.beatmap_md5
             WHERE s.userid = :player_id
-            AND s.play_mode + 0 = :mode
+            AND s.play_mode = :mode
             {passed_only}
             ORDER BY s.id DESC
             LIMIT :limit OFFSET :offset
