@@ -137,7 +137,7 @@ def _stable_plays(freemod: bool, passed_only: bool) -> str:
     if not freemod:
         where += " AND s.mods = 0"
     if passed_only:
-        where += " AND s.completed + 0 >= 1"
+        where += " AND s.completed + 0 >= 2"
     selects = (
         f"SELECT {_PLAY_COLUMNS} FROM {table} s WHERE {where}" for table in tables
     )
@@ -385,13 +385,13 @@ class RoomsRepository:
                             s.completed,
                             ROW_NUMBER() OVER (
                                 PARTITION BY s.userid
-                                ORDER BY (s.completed + 0 >= 1) DESC, s.score DESC,
+                                ORDER BY (s.completed + 0 >= 2) DESC, s.score DESC,
                                          s.time, s.id
                             ) AS rn,
                             COUNT(*) OVER (PARTITION BY s.userid) AS plays
                      FROM {_stable_plays(freemod, False)} s) r
                INNER JOIN users u ON u.id = r.userid AND u.privileges & 1
-               WHERE r.rn = 1 AND r.completed + 0 >= 1
+               WHERE r.rn = 1 AND r.completed + 0 >= 2
                ORDER BY r.score DESC, r.time, r.userid
                LIMIT :limit OFFSET :offset""",
             _window_values(md5, mode, start, end) | {"limit": limit, "offset": offset},

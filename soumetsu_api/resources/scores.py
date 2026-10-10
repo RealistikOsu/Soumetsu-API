@@ -253,7 +253,7 @@ def stable_detail_row_to_data(row: dict, custom_mode: int) -> LazerScoreDetailDa
             row["count_misses"],
             row["completed"],
         ),
-        passed=row["completed"] >= 1,
+        passed=row["completed"] >= 2,
         submitted_at=row["submitted_at"],
         has_replay=row["completed"] == 3,
         ranked_mods=True,
@@ -663,7 +663,7 @@ class ScoresRepository:
         table = self._get_table(custom_mode)
         # IDs follow submission order, and sorting by them walks the index instead of sorting every one of
         # the player's scores by time.
-        passed_only = "AND s.completed >= 1" if exclude_failed else ""
+        passed_only = "AND s.completed >= 2" if exclude_failed else ""
         diff_col = [
             "difficulty_std",
             "difficulty_taiko",

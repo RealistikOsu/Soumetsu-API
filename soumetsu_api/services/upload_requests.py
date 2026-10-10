@@ -162,7 +162,7 @@ async def create_request(
     found = None
     for custom_mode in STABLE_CUSTOM_MODES:
         score = await ctx.scores.find_by_id(score_id, custom_mode)
-        if score and score.player_id == user_id and score.completed >= 1:
+        if score and score.player_id == user_id and score.completed >= 2:
             found = custom_mode
             break
     if found is None:

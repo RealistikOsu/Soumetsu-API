@@ -45,7 +45,7 @@ def stable_grade(
     count_misses: int,
     completed: int,
 ) -> str:
-    if completed == 0:
+    if completed < 2:
         return "F"
 
     if play_mode == 2:
