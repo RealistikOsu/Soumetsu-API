@@ -35,6 +35,12 @@ class ClanMemberStats(BaseModel):
     total_hits: int
 
 
+class ClanLeaderboardRow(ClanMemberStats):
+    clan_id: int
+    name: str
+    tag: str
+
+
 class ClanTopScore(BaseModel):
     id: int
     player_id: int
@@ -312,6 +318,40 @@ class ClansRepository:
         """
         rows = await self._mysql.fetch_all(query, {"clan_id": clan_id})
         return [ClanMemberStats(**row) for row in rows]
+
+    async def list_leaderboard_rows(
+        self,
+        mode: int,
+        custom_mode: int,
+    ) -> list[ClanLeaderboardRow]:
+        """Every public member of every clan, best pp first within each clan."""
+        table = get_stats_table(custom_mode)
+        suffix = get_mode_suffix(mode)
+
+        rows = await self._mysql.fetch_all(
+            f"""SELECT c.id AS clan_id, c.name, c.tag,
+                       s.pp_{suffix} AS pp,
+                       s.ranked_score_{suffix} AS ranked_score,
+                       s.total_score_{suffix} AS total_score,
+                       s.playcount_{suffix} AS playcount,
+                       s.replays_watched_{suffix} AS replays_watched,
+                       s.total_hits_{suffix} AS total_hits
+                FROM clans c
+                INNER JOIN user_clans uc ON uc.clan = c.id
+                INNER JOIN {table} s ON s.id = uc.user
+                INNER JOIN users u ON u.id = uc.user
+                WHERE u.privileges & 1 > 0
+                ORDER BY c.id, s.pp_{suffix} DESC""",
+            {},
+        )
+        return [ClanLeaderboardRow(**row) for row in rows]
+
+    async def get_member_counts(self) -> dict[int, int]:
+        rows = await self._mysql.fetch_all(
+            "SELECT clan, COUNT(*) AS n FROM user_clans GROUP BY clan",
+            {},
+        )
+        return {row["clan"]: row["n"] for row in rows}
 
     async def get_all_clan_ids(self) -> list[int]:
         rows = await self._mysql.fetch_all(

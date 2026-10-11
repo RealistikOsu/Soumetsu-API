@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import override
@@ -12,6 +14,7 @@ from soumetsu_api.constants import is_valid_mode
 from soumetsu_api.resources.clans import CLAN_PERM_MEMBER
 from soumetsu_api.resources.clans import CLAN_PERM_OWNER
 from soumetsu_api.resources.clans import ClanData
+from soumetsu_api.resources.clans import ClanLeaderboardRow
 from soumetsu_api.resources.clans import ClanMemberData
 from soumetsu_api.resources.clans import ClanMemberStats
 from soumetsu_api.resources.leaderboard import _calculate_level
@@ -535,72 +538,39 @@ async def get_clan_leaderboard(
     if limit > 100:
         limit = 100
 
-    all_clan_ids = await ctx.clans.get_all_clan_ids()
+    # Two queries for every clan at once; one per clan made the page take seconds.
+    rows, member_counts = await asyncio.gather(
+        ctx.clans.list_leaderboard_rows(mode, custom_mode),
+        ctx.clans.get_member_counts(),
+    )
 
-    clan_entries: list[tuple[int, ClanData, ClanMemberStats, int, int]] = []
-    for clan_id in all_clan_ids:
-        clan = await ctx.clans.get_by_id(clan_id)
-        if not clan:
-            continue
+    by_clan: dict[int, list[ClanLeaderboardRow]] = {}
+    for row in rows:
+        by_clan.setdefault(row.clan_id, []).append(row)
 
-        member_stats = await ctx.clans.get_clan_member_stats(
-            clan_id,
-            mode,
-            custom_mode,
-        )
-        if not member_stats:
-            continue
-
-        weighted_pp = _compute_weighted_pp(member_stats)
-        total_ranked_score = sum(m.ranked_score for m in member_stats)
-        total_score = sum(m.total_score for m in member_stats)
-        total_playcount = sum(m.playcount for m in member_stats)
-        member_count = await ctx.clans.get_member_count(clan_id)
-
-        total_replays_watched = sum(m.replays_watched for m in member_stats)
-        total_hits = sum(m.total_hits for m in member_stats)
-
-        clan_entries.append(
-            (
-                weighted_pp,
-                clan,
-                ClanMemberStats(
-                    pp=weighted_pp,
-                    ranked_score=total_ranked_score,
-                    total_score=total_score,
-                    playcount=total_playcount,
-                    replays_watched=total_replays_watched,
-                    total_hits=total_hits,
-                ),
-                member_count,
-                clan_id,
-            ),
-        )
-
-    clan_entries.sort(key=lambda x: x[0], reverse=True)
+    ranked = sorted(
+        ((_compute_weighted_pp(members), members) for members in by_clan.values()),
+        key=lambda entry: entry[0],
+        reverse=True,
+    )
 
     offset = (page - 1) * limit
-    paginated = clan_entries[offset : offset + limit]
-
-    results = []
-    for i, (_, clan, stats, member_count, _) in enumerate(paginated):
-        results.append(
-            ClanLeaderboardEntryResult(
-                id=clan.id,
-                name=clan.name,
-                tag=clan.tag,
-                chosen_mode=ClanModeStatsResult(
-                    pp=stats.pp,
-                    ranked_score=stats.ranked_score,
-                    total_score=stats.total_score,
-                    playcount=stats.playcount,
-                ),
-                rank=offset + i + 1,
-                member_count=member_count,
+    return [
+        ClanLeaderboardEntryResult(
+            id=members[0].clan_id,
+            name=members[0].name,
+            tag=members[0].tag,
+            chosen_mode=ClanModeStatsResult(
+                pp=weighted_pp,
+                ranked_score=sum(m.ranked_score for m in members),
+                total_score=sum(m.total_score for m in members),
+                playcount=sum(m.playcount for m in members),
             ),
+            rank=offset + i + 1,
+            member_count=member_counts.get(members[0].clan_id, 0),
         )
-
-    return results
+        for i, (weighted_pp, members) in enumerate(ranked[offset : offset + limit])
+    ]
 
 
 async def get_clan_top_scores(
