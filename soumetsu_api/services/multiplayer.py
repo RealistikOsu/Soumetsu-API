@@ -49,6 +49,7 @@ class MatchSummary:
     id: int
     name: str
     status: str
+    source: str
     started_at: datetime
     ended_at: datetime | None
     host: UserRef | None
@@ -194,6 +195,7 @@ def build_summary(
         id=match.id,
         name=match.name,
         status=match.status,
+        source=match.source,
         started_at=as_utc(match.created_at),
         ended_at=as_utc(match.ended_at) if match.ended_at else None,
         host=host,

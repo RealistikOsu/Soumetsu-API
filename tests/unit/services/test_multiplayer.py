@@ -27,6 +27,7 @@ MATCH = MatchData(
     name="Evening lobby",
     host_id=1,
     status="ended",
+    source="stable",
     created_at=START,
     ended_at=None,
 )

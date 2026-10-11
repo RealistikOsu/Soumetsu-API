@@ -16,6 +16,7 @@ class MatchData(BaseModel):
     name: str
     host_id: int | None
     status: str
+    source: str
     created_at: datetime
     ended_at: datetime | None
 
@@ -67,7 +68,7 @@ class MultiplayerRepository:
 
     async def find_match(self, match_id: int) -> MatchData | None:
         row = await self._mysql.fetch_one(
-            """SELECT id, name, host_id, status, created_at, ended_at
+            """SELECT id, name, host_id, status, source, created_at, ended_at
                FROM mp_matches WHERE id = :match_id""",
             {"match_id": match_id},
         )
@@ -85,7 +86,7 @@ class MultiplayerRepository:
         if limit is not None:
             params |= {"limit": limit, "offset": offset}
         rows = await self._mysql.fetch_all(
-            f"""SELECT m.id, m.name, m.host_id, m.status, m.created_at, m.ended_at
+            f"""SELECT m.id, m.name, m.host_id, m.status, m.source, m.created_at, m.ended_at
                 FROM ({_PLAYER_MATCHES}) p
                 INNER JOIN mp_matches m ON m.id = p.match_id
                 WHERE m.status = :status
