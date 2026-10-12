@@ -49,7 +49,7 @@ class TestLegacyCounts:
 
     def test_mania_uses_gekis_and_katus(self) -> None:
         counts = lazer.legacy_counts(
-            3, {"perfect": 100, "great": 50, "good": 5, "ok": 2, "meh": 1, "miss": 4}
+            3, {"perfect": 100, "great": 50, "good": 5, "ok": 2, "meh": 1, "miss": 4},
         )
 
         assert counts["count_gekis"] == 100

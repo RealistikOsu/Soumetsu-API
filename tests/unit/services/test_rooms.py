@@ -11,8 +11,6 @@ import pytest
 from soumetsu_api.api.v2.rooms import DailyChallengeResponse
 from soumetsu_api.api.v2.rooms import PlaylistDetailResponse
 from soumetsu_api.api.v2.rooms import ScoresResponse
-from soumetsu_api.resources.rooms import _stable_plays
-from soumetsu_api.resources.rooms import _window_values
 from soumetsu_api.resources.rooms import STATUS_FILTERS
 from soumetsu_api.resources.rooms import BestScoreData
 from soumetsu_api.resources.rooms import LadderData
@@ -20,6 +18,8 @@ from soumetsu_api.resources.rooms import PercentileData
 from soumetsu_api.resources.rooms import RoomData
 from soumetsu_api.resources.rooms import RoomItemData
 from soumetsu_api.resources.rooms import StableLadderData
+from soumetsu_api.resources.rooms import _stable_plays
+from soumetsu_api.resources.rooms import _window_values
 from soumetsu_api.services import is_error
 from soumetsu_api.services import rooms
 from soumetsu_api.services.rooms import Mod
@@ -41,7 +41,7 @@ ROOM = RoomData(
 
 
 def make_item(
-    item_id: int, stars: float | None, set_id: int | None = 5
+    item_id: int, stars: float | None, set_id: int | None = 5,
 ) -> RoomItemData:
     return RoomItemData(
         room_id=3,
@@ -229,7 +229,7 @@ def test_playlist_response_keeps_shapes() -> None:
     )
 
     dumped = PlaylistDetailResponse.model_validate(asdict(detail)).model_dump(
-        mode="json"
+        mode="json",
     )
 
     assert dumped["room"]["created_at"] == "2026-10-01T12:00:00Z"
@@ -257,7 +257,7 @@ def test_daily_response_serialises_date() -> None:
     )
 
     dumped = DailyChallengeResponse.model_validate(asdict(result)).model_dump(
-        mode="json"
+        mode="json",
     )
 
     assert dumped["date"] == "2026-10-01"
@@ -353,7 +353,7 @@ async def test_a_challenge_stays_secret_until_its_own_start() -> None:
     mysql.set_result(
         "FROM lazer_daily_challenges d",
         challenge_row(
-            now.date(), starts_at=(now + timedelta(hours=2)).replace(tzinfo=None)
+            now.date(), starts_at=(now + timedelta(hours=2)).replace(tzinfo=None),
         ),
     )
     ctx = MockContext(mysql)
@@ -438,7 +438,7 @@ def test_shape_stable_scores() -> None:
 
 def test_stable_mods_use_the_shared_conversion() -> None:
     [score] = rooms.shape_stable_scores(
-        [stable_row(1, mods=8, playback_rate=1.0)], ruleset=0, offset=0
+        [stable_row(1, mods=8, playback_rate=1.0)], ruleset=0, offset=0,
     )
 
     assert score.mods == [Mod("CL", {}), Mod("HD", {})]

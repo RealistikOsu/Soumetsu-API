@@ -338,7 +338,7 @@ class ScoresRepository:
         return lazer_detail_row_to_data(dict(row)) if row else None
 
     async def find_stable_detail(
-        self, score_id: int, custom_mode: int
+        self, score_id: int, custom_mode: int,
     ) -> LazerScoreDetailData | None:
         if custom_mode in LAZER_VARIANTS:
             return None
@@ -415,7 +415,7 @@ class ScoresRepository:
     ) -> list[ScoreWithBeatmap]:
         if custom_mode in LAZER_VARIANTS:
             return await self._list_lazer_with_beatmap(
-                score_ids, LAZER_VARIANTS[custom_mode]
+                score_ids, LAZER_VARIANTS[custom_mode],
             )
 
         table = self._get_table(custom_mode)
@@ -454,7 +454,7 @@ class ScoresRepository:
     ) -> list[ScoreWithBeatmap]:
         if custom_mode in LAZER_VARIANTS:
             return await self._list_lazer_best(
-                player_id, mode, LAZER_VARIANTS[custom_mode], limit, offset
+                player_id, mode, LAZER_VARIANTS[custom_mode], limit, offset,
             )
 
         table = self._get_table(custom_mode)
@@ -491,7 +491,7 @@ class ScoresRepository:
         return [ScoreWithBeatmap(**row) for row in rows]
 
     async def _list_lazer_with_beatmap(
-        self, score_ids: list[int], variant: int
+        self, score_ids: list[int], variant: int,
     ) -> list[ScoreWithBeatmap]:
         placeholders = ", ".join(f":id{i}" for i in range(len(score_ids)))
         rows = await self._mysql.fetch_all(
@@ -514,7 +514,7 @@ class ScoresRepository:
         return [ScoreWithBeatmap(**lazer_score_row_to_data(dict(r))) for r in rows]
 
     async def _list_lazer_best(
-        self, player_id: int, mode: int, variant: int, limit: int, offset: int
+        self, player_id: int, mode: int, variant: int, limit: int, offset: int,
     ) -> list[ScoreWithBeatmap]:
         rows = await self._mysql.fetch_all(
             # A play is the player's best on its map when no other play of theirs beats it, so this walks their
@@ -574,7 +574,7 @@ class ScoresRepository:
         return [ScoreWithBeatmap(**lazer_score_row_to_data(dict(r))) for r in rows]
 
     async def _list_lazer_top_plays(
-        self, mode: int, variant: int, limit: int, offset: int
+        self, mode: int, variant: int, limit: int, offset: int,
     ) -> list[ScoreTopPlay]:
         rows = await self._mysql.fetch_all(
             # Walks idx_lazer_scores_top in pp order and stops at the page, instead of ranking every score first.
@@ -600,7 +600,7 @@ class ScoresRepository:
         return [ScoreTopPlay(**lazer_score_row_to_data(dict(r))) for r in rows]
 
     async def _list_lazer_beatmap_scores(
-        self, beatmap_md5: str, mode: int, variant: int, limit: int, offset: int
+        self, beatmap_md5: str, mode: int, variant: int, limit: int, offset: int,
     ) -> list[ScoreWithPlayer]:
         rows = await self._mysql.fetch_all(
             f"""SELECT * FROM (
@@ -637,7 +637,7 @@ class ScoresRepository:
                         username=data["username"],
                         country=data["country"],
                     ),
-                )
+                ),
             )
         return scores
 
@@ -830,7 +830,7 @@ class ScoresRepository:
     ) -> list[ScoreTopPlay]:
         if custom_mode in LAZER_VARIANTS:
             return await self._list_lazer_top_plays(
-                mode, LAZER_VARIANTS[custom_mode], limit, offset
+                mode, LAZER_VARIANTS[custom_mode], limit, offset,
             )
 
         table = self._get_table(custom_mode)
@@ -935,7 +935,7 @@ class ScoresRepository:
     ) -> list[ScoreWithPlayer]:
         if custom_mode in LAZER_VARIANTS:
             return await self._list_lazer_beatmap_scores(
-                beatmap_md5, mode, LAZER_VARIANTS[custom_mode], limit, offset
+                beatmap_md5, mode, LAZER_VARIANTS[custom_mode], limit, offset,
             )
 
         table = self._get_table(custom_mode)

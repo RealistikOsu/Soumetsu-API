@@ -362,7 +362,7 @@ async def _stable_summary(
         return 0, None, None
     start, end = window_bounds(window)
     return pick_percentiles(
-        await ctx.rooms.list_stable_percentiles(md5, ruleset, start, end, freemod)
+        await ctx.rooms.list_stable_percentiles(md5, ruleset, start, end, freemod),
     )
 
 
@@ -468,7 +468,7 @@ async def get_daily_challenge(
         return RoomsError.DAILY_CHALLENGE_NOT_FOUND
 
     stable_players, stable_10, stable_50 = await _stable_summary(
-        ctx, window, freemod, scheduled.beatmap_md5, scheduled.ruleset_id
+        ctx, window, freemod, scheduled.beatmap_md5, scheduled.ruleset_id,
     )
     return DailyChallengeResult(
         date=day,
