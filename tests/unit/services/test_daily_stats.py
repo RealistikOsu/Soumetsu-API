@@ -232,7 +232,7 @@ async def test_rows_are_read_from_the_table() -> None:
                 "placement": 0,
                 "stable_placement": 2,
                 "finalised": 1,
-            }
+            },
         ],
     )
 

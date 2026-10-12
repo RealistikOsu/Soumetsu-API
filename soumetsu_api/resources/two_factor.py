@@ -70,7 +70,7 @@ class TwoFactorRepository:
     # window in which that code could still be valid.
     async def use_step(self, user_id: int, step: int) -> bool:
         used = await self._redis.set(
-            f"{USED_PREFIX}{user_id}:{step}", 1, nx=True, ex=150
+            f"{USED_PREFIX}{user_id}:{step}", 1, nx=True, ex=150,
         )
         return bool(used)
 
@@ -106,7 +106,7 @@ class TwoFactorRepository:
             return False
         # The lock makes two logins racing for the same code see one success between them.
         if not await self._redis.set(
-            f"{USED_PREFIX}recovery:{row['id']}", 1, nx=True, ex=60
+            f"{USED_PREFIX}recovery:{row['id']}", 1, nx=True, ex=60,
         ):
             return False
         await self._mysql.execute(
@@ -123,7 +123,7 @@ class TwoFactorRepository:
         )
 
     async def create_challenge(
-        self, user_id: int, privileges: int, ip_address: str
+        self, user_id: int, privileges: int, ip_address: str,
     ) -> str:
         token = crypto.generate_token(32)
         challenge = LoginChallenge(user_id, privileges, ip_address, attempts=0)

@@ -78,7 +78,7 @@ class TestRepository:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("custom_mode", "variant"), LAZER_MODES)
     async def test_find_by_id_reads_lazer_scores(
-        self, custom_mode: CustomMode, variant: int
+        self, custom_mode: CustomMode, variant: int,
     ) -> None:
         mysql = RecordingMySQL()
         mysql.set_result("FROM lazer_scores", dict(LAZER_ROW))
@@ -92,7 +92,7 @@ class TestRepository:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("custom_mode", "variant"), LAZER_MODES)
     async def test_lazer_best_plays_carry_their_beatmap(
-        self, custom_mode: CustomMode, variant: int
+        self, custom_mode: CustomMode, variant: int,
     ) -> None:
         row = {
             **LAZER_ROW,
@@ -114,7 +114,7 @@ class TestRepository:
     @pytest.mark.parametrize("custom_mode", [m for m, _ in LAZER_MODES])
     @pytest.mark.parametrize("method", ["list_player_firsts", "list_player_pinned"])
     async def test_lazer_has_no_firsts_or_pins(
-        self, mock_mysql: MockMySQLAdapter, method: str, custom_mode: CustomMode
+        self, mock_mysql: MockMySQLAdapter, method: str, custom_mode: CustomMode,
     ) -> None:
         repository = scores.ScoresRepository(mock_mysql)
 
@@ -124,7 +124,7 @@ class TestRepository:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("custom_mode", [m for m, _ in LAZER_MODES])
 async def test_lazer_scores_cannot_be_pinned(
-    mock_context: MockContext, custom_mode: CustomMode
+    mock_context: MockContext, custom_mode: CustomMode,
 ) -> None:
     result = await scores_service.pin_score(mock_context, 5, 12, custom_mode)
 
@@ -200,7 +200,7 @@ def test_lazer_detail_row_without_beatmap() -> None:
 class TestLazerDetail:
     @pytest.mark.asyncio
     async def test_hides_restricted_players(
-        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext,
     ) -> None:
         mock_mysql.set_result(DETAIL_QUERY, {**DETAIL_ROW, "privileges": 2})
 
@@ -216,7 +216,7 @@ class TestLazerDetail:
 
     @pytest.mark.asyncio
     async def test_rank_is_one_past_the_players_ahead(
-        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext,
     ) -> None:
         mock_mysql.set_result(DETAIL_QUERY, dict(DETAIL_ROW))
         mock_mysql.set_result(RANK_QUERY, {"better_own": 0, "ahead": 4})
@@ -228,7 +228,7 @@ class TestLazerDetail:
 
     @pytest.mark.asyncio
     async def test_no_rank_when_the_player_has_a_better_score(
-        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext,
     ) -> None:
         mock_mysql.set_result(DETAIL_QUERY, dict(DETAIL_ROW))
         mock_mysql.set_result(RANK_QUERY, {"better_own": 1, "ahead": 4})
@@ -390,7 +390,7 @@ def test_stable_grade(
 class TestStableDetail:
     @pytest.mark.asyncio
     async def test_lazer_custom_modes_are_rejected(
-        self, mock_context: MockContext
+        self, mock_context: MockContext,
     ) -> None:
         result = await scores_service.get_stable_score(mock_context, 30, 3)
 
@@ -404,7 +404,7 @@ class TestStableDetail:
 
     @pytest.mark.asyncio
     async def test_hides_restricted_players(
-        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext,
     ) -> None:
         mock_mysql.set_result(STABLE_QUERY, {**STABLE_ROW, "privileges": 2})
 
@@ -414,7 +414,7 @@ class TestStableDetail:
 
     @pytest.mark.asyncio
     async def test_rank_is_one_past_the_players_ahead(
-        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext,
     ) -> None:
         mock_mysql.set_result(STABLE_QUERY, dict(STABLE_ROW))
         mock_mysql.set_result(STABLE_RANK_QUERY, {"ahead": 2})
@@ -426,7 +426,7 @@ class TestStableDetail:
 
     @pytest.mark.asyncio
     async def test_no_rank_when_not_the_players_best(
-        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext
+        self, mock_mysql: MockMySQLAdapter, mock_context: MockContext,
     ) -> None:
         mock_mysql.set_result(STABLE_QUERY, {**STABLE_ROW, "completed": 2})
 

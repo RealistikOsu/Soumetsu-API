@@ -46,7 +46,7 @@ def make_round(number: int, set_id: int | None, stars: float | None) -> MatchRou
 
 
 def make_score(
-    user_id: int, number: int, total: int, accuracy: float
+    user_id: int, number: int, total: int, accuracy: float,
 ) -> MatchScoreData:
     return MatchScoreData(
         round=number,

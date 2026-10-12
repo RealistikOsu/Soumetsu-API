@@ -429,11 +429,11 @@ class LazerScoreDetailResult:
 
 
 async def get_lazer_score(
-    ctx: AbstractContext, score_id: int
+    ctx: AbstractContext, score_id: int,
 ) -> ScoreError.OnSuccess[LazerScoreDetailResult]:
     score = await ctx.scores.find_lazer_detail(score_id)
     if not score or privileges.is_restricted(
-        privileges.UserPrivileges(score.player.privileges)
+        privileges.UserPrivileges(score.player.privileges),
     ):
         return ScoreError.SCORE_NOT_FOUND
 
@@ -442,14 +442,14 @@ async def get_lazer_score(
 
 
 async def get_stable_score(
-    ctx: AbstractContext, score_id: int, custom_mode: int
+    ctx: AbstractContext, score_id: int, custom_mode: int,
 ) -> ScoreError.OnSuccess[LazerScoreDetailResult]:
     if custom_mode in LAZER_VARIANTS or not is_valid_custom_mode(custom_mode):
         return ScoreError.INVALID_CUSTOM_MODE
 
     score = await ctx.scores.find_stable_detail(score_id, custom_mode)
     if not score or privileges.is_restricted(
-        privileges.UserPrivileges(score.player.privileges)
+        privileges.UserPrivileges(score.player.privileges),
     ):
         return ScoreError.SCORE_NOT_FOUND
 

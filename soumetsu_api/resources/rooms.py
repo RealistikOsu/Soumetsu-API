@@ -264,7 +264,7 @@ class RoomsRepository:
         return [CountData(**row) for row in rows]
 
     async def list_percentiles(
-        self, room_id: int, item_id: int
+        self, room_id: int, item_id: int,
     ) -> list[PercentileData]:
         rows = await self._mysql.fetch_all(
             f"""SELECT r.n, r.rn, r.best

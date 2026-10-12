@@ -99,7 +99,7 @@ async def list_profile_comments(
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
     result = await comments.list_profile_comments(
-        ctx, profile_id, page, limit, viewer=ctx.session
+        ctx, profile_id, page, limit, viewer=ctx.session,
     )
     result = response.unwrap(result)
 
