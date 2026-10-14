@@ -64,6 +64,8 @@ class Mod:
 class ChallengeDay:
     date: date
     has_challenge: bool
+    # A challenge runs for a day from its own start, so it can still be on after its date has passed.
+    ends_at: datetime
 
 
 @dataclass
@@ -399,9 +401,9 @@ async def get_challenge_days(
     schedule = await ctx.rooms.list_scheduled(start, end)
     return ChallengeDaysResult(
         days=[
-            ChallengeDay(date=row.challenge_date, has_challenge=True)
+            ChallengeDay(date=row.challenge_date, has_challenge=True, ends_at=window[1])
             for row in schedule
-            if has_started(window_of(row.challenge_date, row.starts_at))
+            if has_started(window := window_of(row.challenge_date, row.starts_at))
         ],
     )
 

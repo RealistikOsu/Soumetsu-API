@@ -28,6 +28,7 @@ class ModResponse(BaseModel):
 class ChallengeDayResponse(BaseModel):
     date: date
     has_challenge: bool
+    ends_at: datetime
 
 
 class ChallengeDaysResponse(BaseModel):

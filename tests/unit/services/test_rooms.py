@@ -323,6 +323,20 @@ async def test_calendar_leaves_out_scheduled_future_days() -> None:
     assert [day.date for day in result.days] == [today]
 
 
+@pytest.mark.asyncio
+async def test_calendar_says_when_each_challenge_ends() -> None:
+    day = date(2026, 10, 3)
+    mysql = MockMySQLAdapter()
+    mysql.set_result(
+        "FROM lazer_daily_challenges",
+        [{"challenge_date": day, "starts_at": datetime(2026, 10, 3, 18, 0)}],
+    )
+
+    result = await rooms.get_challenge_days(MockContext(mysql), 2026, 10)
+
+    assert result.days[0].ends_at == datetime(2026, 10, 4, 18, 0, tzinfo=UTC)
+
+
 def test_window_defaults_to_the_utc_day() -> None:
     start, end = rooms.window_of(date(2026, 10, 3))
 
