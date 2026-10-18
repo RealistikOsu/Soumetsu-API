@@ -842,7 +842,8 @@ class ScoresRepository:
         ][mode]
 
         query = f"""
-            SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
+            SELECT /*+ JOIN_ORDER(s, b, u) INDEX(s {table}_mode_top) */
+                   s.id, s.beatmap_md5, s.userid as player_id, s.score,
                    s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
@@ -893,7 +894,8 @@ class ScoresRepository:
                 diff_col = diff_cols[mode]
                 mode_queries.append(
                     f"""
-                    (SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score,
+                    (SELECT /*+ JOIN_ORDER(s, b, u) INDEX(s {table}_mode_top) */
+                            s.id, s.beatmap_md5, s.userid as player_id, s.score,
                             s.max_combo, s.full_combo, s.mods, s.300_count as count_300,
                             s.100_count as count_100, s.50_count as count_50,
                             s.katus_count as count_katus, s.gekis_count as count_gekis,
