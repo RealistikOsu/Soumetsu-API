@@ -7,3 +7,7 @@ venv/
 ./volumes
 ./configuration
 .cursor/
+.git
+tests/
+**/__pycache__
+*.pyc

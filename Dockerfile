@@ -2,19 +2,16 @@ FROM python:3.13-slim
 
 ENV PYTHONUNBUFFERED=1
 
-# Install curl for healthchecks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# Python Dependencies
 COPY requirements/main.txt .
-RUN pip install -r main.txt --no-cache-dir
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r main.txt
 
-# Application pre-requisites
-COPY ./scripts /app/scripts
+COPY --chmod=755 ./scripts /app/scripts
 COPY ./logging.yaml /app/logging.yaml
-
-
-# Copy the application
 COPY ./soumetsu_api /app/soumetsu_api
 WORKDIR /app
 
