@@ -7,8 +7,8 @@ from fastapi import UploadFile
 from pydantic import BaseModel
 
 from soumetsu_api.api.v2 import response
-from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import OptionalAuth
+from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresAuthTransaction
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.constants import CustomMode
@@ -215,7 +215,7 @@ async def get_me(
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
     result = await users.get_profile(
-        ctx, ctx.user_id, mode, custom_mode, viewer=ctx.session
+        ctx, ctx.user_id, mode, custom_mode, viewer=ctx.session,
     )
     result = response.unwrap(result)
 
@@ -479,7 +479,7 @@ async def get_user(
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
     result = await users.get_profile(
-        ctx, user_id, mode, custom_mode, viewer=ctx.session
+        ctx, user_id, mode, custom_mode, viewer=ctx.session,
     )
     result = response.unwrap(result)
 
@@ -557,7 +557,7 @@ async def list_profile_comments(
     limit: int = Query(50, ge=1, le=100),
 ) -> Response:
     result = await comments.list_profile_comments(
-        ctx, user_id, page, limit, viewer=ctx.session
+        ctx, user_id, page, limit, viewer=ctx.session,
     )
     result = response.unwrap(result)
 
@@ -657,7 +657,7 @@ async def get_user_rank_history(
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
     result = await user_history.get_rank_history(
-        ctx, user_id, mode, custom_mode, viewer=ctx.session
+        ctx, user_id, mode, custom_mode, viewer=ctx.session,
     )
     result = response.unwrap(result)
 
@@ -684,7 +684,7 @@ async def get_user_pp_history(
     custom_mode: CustomMode = Query(CustomMode.VANILLA),
 ) -> Response:
     result = await user_history.get_pp_history(
-        ctx, user_id, mode, custom_mode, viewer=ctx.session
+        ctx, user_id, mode, custom_mode, viewer=ctx.session,
     )
     result = response.unwrap(result)
 
