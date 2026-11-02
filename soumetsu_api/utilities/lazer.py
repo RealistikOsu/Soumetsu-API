@@ -23,15 +23,15 @@ def playback_rate(raw_mods: str | list[dict[str, Any]]) -> float:
         if mod["acronym"] in defaults:
             return float(
                 (mod.get("settings") or {}).get(
-                    "speed_change", defaults[mod["acronym"]]
-                )
+                    "speed_change", defaults[mod["acronym"]],
+                ),
             )
 
     return 1.0
 
 
 def legacy_counts(
-    ruleset_id: int, raw_statistics: str | dict[str, int]
+    ruleset_id: int, raw_statistics: str | dict[str, int],
 ) -> dict[str, int]:
     """Lazer hit results as stable's count columns, for showing a lazer score like any other."""
     stats = (

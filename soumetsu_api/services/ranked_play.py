@@ -9,7 +9,6 @@ from typing import override
 from fastapi import status
 
 from soumetsu_api.resources.ranked_play import MatchData
-from soumetsu_api.resources.ranked_play import MatchPlayerData
 from soumetsu_api.resources.ranked_play import MatchRoundData
 from soumetsu_api.resources.ranked_play import MatchScoreData
 from soumetsu_api.resources.ranked_play import MatchUserData

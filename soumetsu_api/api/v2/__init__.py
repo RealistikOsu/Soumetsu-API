@@ -83,7 +83,7 @@ def create_router() -> APIRouter:
                 return _image(directory / name, 600)
 
         fallback = next(
-            (f for f in sorted(directory.glob("default.*")) if f.is_file()), None
+            (f for f in sorted(directory.glob("default.*")) if f.is_file()), None,
         )
         if fallback is None:
             raise HTTPException(status_code=404)

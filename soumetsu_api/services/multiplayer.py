@@ -379,7 +379,7 @@ async def get_match(
         participants=rank_participants(roster[match_id], scores),
         maps=[
             MapEntry(
-                game=g.game, mode=g.ruleset_id, mods=g.mods, beatmap=beatmap_ref(g)
+                game=g.game, mode=g.ruleset_id, mods=g.mods, beatmap=beatmap_ref(g),
             )
             for g in games
         ],
