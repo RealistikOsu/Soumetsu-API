@@ -22,6 +22,7 @@ from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import crypto
 from soumetsu_api.utilities.images import validate_image_magic
+from soumetsu_api.utilities.mods import Mod
 
 
 class ClanError(ServiceError):
@@ -143,6 +144,7 @@ class ClanTopScoreResult:
     mods: int
     max_combo: int
     playback_rate: float
+    mods_json: list[Mod] | None
     beatmap_id: int
     beatmapset_id: int
     song_name: str
@@ -605,6 +607,7 @@ async def get_clan_top_scores(
             mods=s.mods,
             max_combo=s.max_combo,
             playback_rate=s.playback_rate,
+            mods_json=s.mods_json,
             beatmap_id=s.beatmap_id,
             beatmapset_id=s.beatmapset_id,
             song_name=s.song_name,

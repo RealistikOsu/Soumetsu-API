@@ -17,6 +17,7 @@ from soumetsu_api.resources.sessions import SessionData
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 from soumetsu_api.utilities import privileges
+from soumetsu_api.utilities.mods import Mod
 
 
 class ScoreError(ServiceError):
@@ -75,6 +76,7 @@ class ScoreResult:
     pp: float
     playtime: int
     playback_rate: float
+    mods_json: list[Mod] | None
     has_replay: bool | None
 
 
@@ -119,6 +121,7 @@ def _score_to_result(score: ScoreData) -> ScoreResult:
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        mods_json=score.mods_json,
         has_replay=score.has_replay,
     )
 
@@ -145,6 +148,7 @@ def score_with_beatmap_to_result(score: ScoreWithBeatmap) -> ScoreWithBeatmapRes
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        mods_json=score.mods_json,
         has_replay=score.has_replay,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
@@ -314,6 +318,7 @@ def _top_play_to_result(score: ScoreTopPlay) -> ScoreTopPlayResult:
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        mods_json=score.mods_json,
         has_replay=score.has_replay,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
@@ -369,6 +374,7 @@ def _top_play_with_mode_to_result(
         pp=score.pp,
         playtime=score.playtime,
         playback_rate=score.playback_rate,
+        mods_json=score.mods_json,
         has_replay=score.has_replay,
         beatmap_id=score.beatmap_id,
         beatmapset_id=score.beatmapset_id,
