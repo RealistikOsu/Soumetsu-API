@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 import time as time_module
 
 from pydantic import BaseModel
+from pydantic import field_validator
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.constants import LAZER_VARIANTS
@@ -12,6 +12,7 @@ from soumetsu_api.resources.ranked_play import stars_for
 from soumetsu_api.utilities import lazer
 from soumetsu_api.utilities.grades import stable_grade
 from soumetsu_api.utilities.mods import mods_from_score
+from soumetsu_api.utilities.mods import parse_mods_json
 
 SCORE_TABLES = ["scores", "scores_relax", "scores_ap"]
 DIFFICULTY_COLUMNS = [
@@ -72,10 +73,16 @@ class ScoreData(BaseModel):
     pp: float
     playtime: int
     playback_rate: float
-    # The patcher's own mod list as JSON text, when the score came with one.
-    mods_json: Any = None
+    # The patcher's own mod list, when the score came with one.
+    mods_json: list[dict[str, object]] | None = None
     # Only lazer rows know this; stable scores keep a replay by their completed flag instead.
     has_replay: bool | None = None
+
+    @field_validator("mods_json", mode="before")
+    @classmethod
+    def _parse_mods_json(cls, value: object) -> list[dict[str, object]] | None:
+        # The driver returns a JSON column as text.
+        return parse_mods_json(value)
 
 
 class ScoreWithBeatmap(ScoreData):

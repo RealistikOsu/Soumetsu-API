@@ -84,27 +84,36 @@ class Mod(BaseModel):
     settings: dict[str, Any] | None = None
 
 
-def _mods_from_json(mods_json: Any) -> list[Mod] | None:
-    """The patcher's own mod list, or None when there isn't a usable one."""
-    if not mods_json:
+def parse_mods_json(value: Any) -> list[dict[str, object]] | None:
+    """A stored mod list, as text from the driver or already parsed; None when there isn't a usable one."""
+    if value is None or value == "":
         return None
 
     try:
-        info = json.loads(mods_json) if isinstance(mods_json, (str, bytes)) else mods_json
-        entries = info["mods"] if isinstance(info, dict) else info
-        return [
-            Mod(acronym=entry["acronym"], settings=entry.get("settings") or None)
-            for entry in entries
-        ]
-    except (ValueError, KeyError, TypeError, AttributeError):
+        mods = json.loads(value) if isinstance(value, (str, bytes)) else value
+    except ValueError:
         return None
 
+    if not isinstance(mods, list) or not all(
+        isinstance(mod, dict) and isinstance(mod.get("acronym"), str) for mod in mods
+    ):
+        return None
 
-def mods_from_score(mods: int, playback_rate: float, mods_json: Any = None) -> list[Mod]:
+    return mods
+
+
+def mods_from_score(
+    mods: int,
+    playback_rate: float,
+    mods_json: list[dict[str, object]] | str | None = None,
+) -> list[Mod]:
     # A score the patcher submitted with its own mod list is shown as it was sent.
-    from_json = _mods_from_json(mods_json)
-    if from_json is not None:
-        return from_json
+    stored = parse_mods_json(mods_json)
+    if stored is not None:
+        return [
+            Mod(acronym=str(mod["acronym"]), settings=mod.get("settings") or None)  # type: ignore[arg-type]
+            for mod in stored
+        ]
 
     result: list[Mod] = [Mod(acronym="CL")]
 
