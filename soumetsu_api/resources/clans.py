@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
@@ -52,6 +54,7 @@ class ClanTopScore(BaseModel):
     accuracy: float
     pp: float
     playback_rate: float
+    mods_json: Any = None
     beatmap_id: int
     beatmapset_id: int
     song_name: str
@@ -377,7 +380,7 @@ class ClansRepository:
 
         query = f"""
             SELECT s.id, s.userid as player_id, s.score, s.max_combo,
-                   s.full_combo, s.mods, s.accuracy, s.pp, s.playback_rate,
+                   s.full_combo, s.mods, s.accuracy, s.pp, s.playback_rate, s.mods_json,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked,
                    u.username

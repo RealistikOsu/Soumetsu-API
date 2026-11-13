@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 import time as time_module
 
 from pydantic import BaseModel
@@ -71,6 +72,8 @@ class ScoreData(BaseModel):
     pp: float
     playtime: int
     playback_rate: float
+    # The patcher's own mod list as JSON text, when the score came with one.
+    mods_json: Any = None
     # Only lazer rows know this; stable scores keep a replay by their completed flag instead.
     has_replay: bool | None = None
 
@@ -228,7 +231,7 @@ def stable_detail_row_to_data(row: dict, custom_mode: int) -> LazerScoreDetailDa
 
     rate = float(row["playback_rate"])
     mods = []
-    for mod in mods_from_score(row["mods"], rate):
+    for mod in mods_from_score(row["mods"], rate, dict(row).get("mods_json")):
         settings = mod.settings
         if settings is not None:
             settings = {"speed_change": round(rate, 2)} if rate != 1 else None
@@ -299,7 +302,7 @@ class ScoresRepository:
                    100_count as count_100, 50_count as count_50,
                    katus_count as count_katus, gekis_count as count_gekis,
                    misses_count as count_misses, time as submitted_at, play_mode,
-                   completed, accuracy, pp, playtime, playback_rate
+                   completed, accuracy, pp, playtime, playback_rate, mods_json
             FROM {table}
             WHERE id = :score_id
         """
@@ -350,7 +353,7 @@ class ScoresRepository:
                        s.50_count AS count_50, s.katus_count AS count_katus,
                        s.gekis_count AS count_gekis, s.misses_count AS count_misses,
                        s.time AS submitted_at, s.play_mode, s.completed, s.accuracy,
-                       s.pp, s.playback_rate,
+                       s.pp, s.playback_rate, s.mods_json,
                        u.username, u.country, u.privileges, u.latest_activity,
                        b.beatmap_id, b.beatmapset_id AS beatmap_set_id, b.song_name,
                        b.mode AS beatmap_mode, b.ranked AS beatmap_ranked,
@@ -426,7 +429,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                    b.beatmap_id, b.beatmapset_id, b.song_name, b.ranked,
                    CASE s.play_mode
                        WHEN 0 THEN b.difficulty_std
@@ -467,7 +470,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM {table} s
@@ -677,7 +680,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM {table} s
@@ -724,7 +727,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM first_places f
@@ -773,7 +776,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked
             FROM user_pinned p
@@ -848,7 +851,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                    b.beatmap_id, b.beatmapset_id, b.song_name,
                    b.{diff_col} as difficulty, b.ranked,
                    u.username
@@ -900,7 +903,7 @@ class ScoresRepository:
                             s.100_count as count_100, s.50_count as count_50,
                             s.katus_count as count_katus, s.gekis_count as count_gekis,
                             s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                            s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                            s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                             b.beatmap_id, b.beatmapset_id, b.song_name,
                             b.{diff_col} as difficulty, b.ranked,
                             u.username, {custom_mode} as custom_mode
@@ -948,7 +951,7 @@ class ScoresRepository:
                    s.100_count as count_100, s.50_count as count_50,
                    s.katus_count as count_katus, s.gekis_count as count_gekis,
                    s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
-                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate,
+                   s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
                    u.id as player_db_id, u.username, u.country
             FROM {table} s
             INNER JOIN users u ON s.userid = u.id

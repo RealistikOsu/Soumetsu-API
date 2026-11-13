@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from enum import IntFlag
 from typing import Any
 
@@ -83,7 +84,28 @@ class Mod(BaseModel):
     settings: dict[str, Any] | None = None
 
 
-def mods_from_score(mods: int, playback_rate: float) -> list[Mod]:
+def _mods_from_json(mods_json: Any) -> list[Mod] | None:
+    """The patcher's own mod list, or None when there isn't a usable one."""
+    if not mods_json:
+        return None
+
+    try:
+        info = json.loads(mods_json) if isinstance(mods_json, (str, bytes)) else mods_json
+        entries = info["mods"] if isinstance(info, dict) else info
+        return [
+            Mod(acronym=entry["acronym"], settings=entry.get("settings") or None)
+            for entry in entries
+        ]
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def mods_from_score(mods: int, playback_rate: float, mods_json: Any = None) -> list[Mod]:
+    # A score the patcher submitted with its own mod list is shown as it was sent.
+    from_json = _mods_from_json(mods_json)
+    if from_json is not None:
+        return from_json
+
     result: list[Mod] = [Mod(acronym="CL")]
 
     # NC implies DT in the legacy bitmask; suppress DT so it doesn't

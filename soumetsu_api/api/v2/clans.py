@@ -265,7 +265,7 @@ async def get_clan_top_scores(
                 username=s.username,
                 pp=s.pp,
                 accuracy=s.accuracy,
-                mods=mods_from_score(s.mods, s.playback_rate),
+                mods=mods_from_score(s.mods, s.playback_rate, getattr(s, "mods_json", None)),
                 max_combo=s.max_combo,
                 beatmap=ClanTopScoreBeatmapResponse(
                     beatmap_id=s.beatmap_id,
