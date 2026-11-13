@@ -4,6 +4,7 @@ import json
 import time as time_module
 
 from pydantic import BaseModel
+from pydantic import TypeAdapter
 from pydantic import field_validator
 
 from soumetsu_api.adapters.mysql import ImplementsMySQL
@@ -11,8 +12,8 @@ from soumetsu_api.constants import LAZER_VARIANTS
 from soumetsu_api.resources.ranked_play import stars_for
 from soumetsu_api.utilities import lazer
 from soumetsu_api.utilities.grades import stable_grade
+from soumetsu_api.utilities.mods import Mod
 from soumetsu_api.utilities.mods import mods_from_score
-from soumetsu_api.utilities.mods import parse_mods_json
 
 SCORE_TABLES = ["scores", "scores_relax", "scores_ap"]
 DIFFICULTY_COLUMNS = [
@@ -74,15 +75,15 @@ class ScoreData(BaseModel):
     playtime: int
     playback_rate: float
     # The patcher's own mod list, when the score came with one.
-    mods_json: list[dict[str, object]] | None = None
+    mods_json: list[Mod] | None = None
     # Only lazer rows know this; stable scores keep a replay by their completed flag instead.
     has_replay: bool | None = None
 
     @field_validator("mods_json", mode="before")
     @classmethod
-    def _parse_mods_json(cls, value: object) -> list[dict[str, object]] | None:
+    def _decode_mods_json(cls, value: object) -> object:
         # The driver returns a JSON column as text.
-        return parse_mods_json(value)
+        return json.loads(value) if isinstance(value, (str, bytes)) else value
 
 
 class ScoreWithBeatmap(ScoreData):
@@ -223,6 +224,9 @@ def stable_statistics(row: dict) -> dict[str, int]:
             }
 
 
+_MODS = TypeAdapter(list[Mod])
+
+
 def stable_detail_row_to_data(row: dict, custom_mode: int) -> LazerScoreDetailData:
     beatmap = None
     if row["beatmap_set_id"] is not None:
@@ -237,12 +241,15 @@ def stable_detail_row_to_data(row: dict, custom_mode: int) -> LazerScoreDetailDa
         )
 
     rate = float(row["playback_rate"])
-    mods = []
-    for mod in mods_from_score(row["mods"], rate, dict(row).get("mods_json")):
-        settings = mod.settings
-        if settings is not None:
-            settings = {"speed_change": round(rate, 2)} if rate != 1 else None
-        mods.append({"acronym": mod.acronym, "settings": settings})
+    if row["mods_json"] is not None:
+        mods = [mod.model_dump() for mod in _MODS.validate_json(row["mods_json"])]
+    else:
+        mods = []
+        for mod in mods_from_score(row["mods"], rate):
+            settings = mod.settings
+            if settings is not None:
+                settings = {"speed_change": round(rate, 2)} if rate != 1 else None
+            mods.append({"acronym": mod.acronym, "settings": settings})
 
     return LazerScoreDetailData(
         id=row["id"],

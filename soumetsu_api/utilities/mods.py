@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from enum import IntFlag
 from typing import Any
 
@@ -84,36 +83,10 @@ class Mod(BaseModel):
     settings: dict[str, Any] | None = None
 
 
-def parse_mods_json(value: Any) -> list[dict[str, object]] | None:
-    """A stored mod list, as text from the driver or already parsed; None when there isn't a usable one."""
-    if value is None or value == "":
-        return None
-
-    try:
-        mods = json.loads(value) if isinstance(value, (str, bytes)) else value
-    except ValueError:
-        return None
-
-    if not isinstance(mods, list) or not all(
-        isinstance(mod, dict) and isinstance(mod.get("acronym"), str) for mod in mods
-    ):
-        return None
-
-    return mods
-
-
-def mods_from_score(
-    mods: int,
-    playback_rate: float,
-    mods_json: list[dict[str, object]] | str | None = None,
-) -> list[Mod]:
+def mods_from_score(mods: int, playback_rate: float, mods_json: list[Mod] | None = None) -> list[Mod]:
     # A score the patcher submitted with its own mod list is shown as it was sent.
-    stored = parse_mods_json(mods_json)
-    if stored is not None:
-        return [
-            Mod(acronym=str(mod["acronym"]), settings=mod.get("settings") or None)  # type: ignore[arg-type]
-            for mod in stored
-        ]
+    if mods_json is not None:
+        return mods_json
 
     result: list[Mod] = [Mod(acronym="CL")]
 

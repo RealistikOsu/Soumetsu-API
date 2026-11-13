@@ -346,7 +346,7 @@ async def get_beatmap_scores(
                 score=s.score,
                 max_combo=s.max_combo,
                 full_combo=s.full_combo,
-                mods=mods_from_score(s.mods, s.playback_rate, getattr(s, "mods_json", None)),
+                mods=mods_from_score(s.mods, s.playback_rate, s.mods_json),
                 count_300=s.count_300,
                 count_100=s.count_100,
                 count_50=s.count_50,

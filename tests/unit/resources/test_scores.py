@@ -258,6 +258,7 @@ STABLE_ROW = {
     "accuracy": 98.5,
     "pp": 410.25,
     "playback_rate": 1.5,
+    "mods_json": None,
     "beatmap_id": 7,
     "beatmap_set_id": 70,
     "song_name": "Artist - Title [Insane]",
@@ -434,3 +435,17 @@ class TestStableDetail:
 
         assert not isinstance(result, scores_service.ScoreError)
         assert result.global_rank is None
+
+
+def test_stable_detail_shows_the_patchers_own_mods_untouched():
+    row = {
+        **STABLE_ROW,
+        "mods_json": '[{"acronym": "DT", "settings": {"speed_change": 1.3, "adjust_pitch": false}}, {"acronym": "HD"}]',
+    }
+
+    detail = scores.stable_detail_row_to_data(row, 0)
+
+    assert detail.mods == [
+        {"acronym": "DT", "settings": {"speed_change": 1.3, "adjust_pitch": False}},
+        {"acronym": "HD", "settings": None},
+    ]

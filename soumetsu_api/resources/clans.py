@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from pydantic import BaseModel
 from pydantic import field_validator
 
@@ -7,7 +9,7 @@ from soumetsu_api.adapters.mysql import ImplementsMySQL
 from soumetsu_api.constants import get_mode_suffix
 from soumetsu_api.constants import get_stats_table
 from soumetsu_api.resources.scores import SCORE_TABLES
-from soumetsu_api.utilities.mods import parse_mods_json
+from soumetsu_api.utilities.mods import Mod
 
 CLAN_PERM_MEMBER = 1
 CLAN_PERM_OWNER = 8
@@ -54,13 +56,13 @@ class ClanTopScore(BaseModel):
     accuracy: float
     pp: float
     playback_rate: float
-    mods_json: list[dict[str, object]] | None = None
+    mods_json: list[Mod] | None = None
 
     @field_validator("mods_json", mode="before")
     @classmethod
-    def _parse_mods_json(cls, value: object) -> list[dict[str, object]] | None:
+    def _decode_mods_json(cls, value: object) -> object:
         # The driver returns a JSON column as text.
-        return parse_mods_json(value)
+        return json.loads(value) if isinstance(value, (str, bytes)) else value
     beatmap_id: int
     beatmapset_id: int
     song_name: str
