@@ -3,10 +3,12 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_limiter import FastAPILimiter
 from starlette.responses import Response
@@ -23,12 +25,46 @@ from .v2.response import ServiceInterruptionException
 logger = logging.get_logger(__name__)
 
 
+DESCRIPTION = """\
+The API behind the RealistikOsu website. Every response is wrapped as `{ "status": 200, "data": ... }`,
+and errors carry their code in `data`.
+
+Most endpoints are public. Endpoints about your own account need the token you get from logging in,
+sent as `Authorization: Bearer <token>`.
+"""
+
+TAG_ORDER = (
+    "Users",
+    "Scores",
+    "Beatmaps",
+    "Leaderboards",
+    "Clans",
+    "Friends",
+    "Comments",
+    "Badges",
+    "Multiplayer",
+    "Daily challenge",
+    "Playlists",
+    "Ranked play",
+    "Auth",
+    "Assets",
+    "osu! API compatible",
+    "Misc",
+)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
+        title="RealistikOsu API v2",
+        version="2.0",
+        description=DESCRIPTION,
+        openapi_tags=[{"name": name} for name in TAG_ORDER],
+        servers=[{"url": "https://ussr.pl"}],
         docs_url="/api/v2/docs",
         redoc_url="/api/v2/redoc",
         openapi_url="/api/v2/openapi.json",
     )
+    initialise_openapi(app)
 
     initialise_cors(app)
     initialise_mysql(app)
@@ -42,6 +78,31 @@ def create_app() -> FastAPI:
 
     logger.debug("Finalised app instance.")
     return app
+
+
+def initialise_openapi(app: FastAPI) -> None:
+    # Tokens are read from the header by hand rather than through a security dependency, so the
+    # scheme has to be added to the generated spec here.
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+            servers=app.servers,
+        )
+        schema.setdefault("components", {})["securitySchemes"] = {
+            "token": {"type": "http", "scheme": "bearer"},
+        }
+        schema["security"] = [{}, {"token": []}]
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = openapi
 
 
 def initialise_cors(app: FastAPI) -> None:
