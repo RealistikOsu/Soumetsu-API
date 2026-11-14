@@ -77,3 +77,7 @@ BREVO_API_KEY = os.environ.get("SOUMETSUAPI_BREVO_API_KEY", "")
 # Same format as Soumetsu's BREVO_FROM: "RealistikOsu" <no-reply@ussr.pl>
 MAIL_FROM = os.environ.get("SOUMETSUAPI_MAIL_FROM", "")
 APP_BASE_URL = os.environ.get("SOUMETSUAPI_APP_BASE_URL", "https://ussr.pl").rstrip("/")
+
+# DogStatsD agent. Empty host turns metrics off.
+STATSD_HOST = os.environ.get("STATSD_HOST", "")
+STATSD_PORT = int(os.environ.get("STATSD_PORT", 8125))

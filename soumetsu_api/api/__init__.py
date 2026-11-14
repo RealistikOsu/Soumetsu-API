@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Awaitable
 from collections.abc import Callable
@@ -18,6 +19,7 @@ from soumetsu_api.adapters import mysql
 from soumetsu_api.adapters import redis
 from soumetsu_api.adapters import storage
 from soumetsu_api.utilities import logging
+from soumetsu_api.utilities import statsd
 
 from . import v2
 from .v2.response import ServiceInterruptionException
@@ -200,10 +202,22 @@ def initialise_request_tracing(app: FastAPI) -> None:
             uuid=request.state.uuid,
         )
 
+        started = time.perf_counter()
         try:
-            return await call_next(request)
+            response = await call_next(request)
         finally:
             logging.clear_context()
+
+        route = request.scope.get("route")
+        statsd.timing(
+            "soumetsu_api.request.time",
+            (time.perf_counter() - started) * 1000,
+            [
+                f"route:{route.path if route else 'unmatched'}",
+                f"status:{response.status_code // 100}xx",
+            ],
+        )
+        return response
 
 
 def initialise_interruptions(app: FastAPI) -> None:
