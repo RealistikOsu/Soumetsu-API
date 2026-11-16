@@ -9,8 +9,8 @@ from typing import Any
 from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import Request
-from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi_limiter import FastAPILimiter
 from starlette.responses import Response
 

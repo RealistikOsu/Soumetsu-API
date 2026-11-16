@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import re
-from collections import Counter
 import time as time_module
+from collections import Counter
 from dataclasses import dataclass
 from typing import Literal
 from typing import override
 
 from fastapi import status
 
+from soumetsu_api import settings
 from soumetsu_api.resources.beatmaps import BeatmapData
 from soumetsu_api.resources.beatmaps import ProfileDifficultyData
-from soumetsu_api import settings
 from soumetsu_api.services._common import AbstractContext
 from soumetsu_api.services._common import ServiceError
 

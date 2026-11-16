@@ -36,10 +36,12 @@ BEATMAP = dict(beatmap_id=3, beatmapset_id=4, song_name="s", difficulty=5.0, ran
 
 def test_every_result_keeps_the_mod_list():
     plain = scores._score_to_result(ScoreData(**SCORE))
-    with_beatmap = scores.score_with_beatmap_to_result(ScoreWithBeatmap(**SCORE, **BEATMAP))
+    with_beatmap = scores.score_with_beatmap_to_result(
+        ScoreWithBeatmap(**SCORE, **BEATMAP),
+    )
     top = scores._top_play_to_result(ScoreTopPlay(**SCORE, **BEATMAP, username="u"))
     top_mode = scores._top_play_with_mode_to_result(
-        ScoreTopPlayWithMode(**SCORE, **BEATMAP, username="u", custom_mode=1)
+        ScoreTopPlayWithMode(**SCORE, **BEATMAP, username="u", custom_mode=1),
     )
 
     for result in (plain, with_beatmap, top, top_mode):

@@ -134,7 +134,7 @@ def is_banned(user_privileges: UserPrivileges) -> bool:
 
 # A restricted player stays visible to themselves and to staff who manage users, as on Hanayo.
 def can_view(
-    user_id: int, user_privileges: UserPrivileges, viewer: SessionData | None
+    user_id: int, user_privileges: UserPrivileges, viewer: SessionData | None,
 ) -> bool:
     if not is_restricted(user_privileges):
         return True

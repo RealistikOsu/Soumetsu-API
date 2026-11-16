@@ -83,7 +83,9 @@ class Mod(BaseModel):
     settings: dict[str, Any] | None = None
 
 
-def mods_from_score(mods: int, playback_rate: float, mods_json: list[Mod] | None = None) -> list[Mod]:
+def mods_from_score(
+    mods: int, playback_rate: float, mods_json: list[Mod] | None = None,
+) -> list[Mod]:
     # A score the patcher submitted with its own mod list is shown as it was sent.
     if mods_json is not None:
         return mods_json
