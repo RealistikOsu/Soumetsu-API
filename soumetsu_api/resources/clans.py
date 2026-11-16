@@ -63,6 +63,7 @@ class ClanTopScore(BaseModel):
     def _decode_mods_json(cls, value: object) -> object:
         # The driver returns a JSON column as text.
         return json.loads(value) if isinstance(value, (str, bytes)) else value
+
     beatmap_id: int
     beatmapset_id: int
     song_name: str

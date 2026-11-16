@@ -39,7 +39,9 @@ def test_prefers_the_patchers_own_list():
 
 
 def test_score_data_decodes_the_driver_text():
-    score = ScoreData(**ROW, mods_json='[{"acronym": "DT", "settings": {"speed_change": 1.3}}]')
+    score = ScoreData(
+        **ROW, mods_json='[{"acronym": "DT", "settings": {"speed_change": 1.3}}]',
+    )
 
     assert score.mods_json == [Mod(acronym="DT", settings={"speed_change": 1.3})]
 
