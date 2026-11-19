@@ -32,6 +32,8 @@ class BeatmapData(BaseModel):
     updated_at: int
     ranked_status_frozen: bool
     mapper_id: int
+    # Played by avoiding every object, so the lowest score ranks first.
+    dodge_the_beat: bool = False
 
 
 class MostPlayedBeatmapData(BaseModel):
@@ -103,7 +105,8 @@ class BeatmapsRepository:
                       difficulty_ctb, difficulty_mania, max_combo,
                       hit_length, bpm, playcount, passcount, ranked,
                       latest_update as updated_at,
-                      ranked_status_freezed as ranked_status_frozen, mapper_id
+                      ranked_status_freezed as ranked_status_frozen, mapper_id,
+                      dodge_the_beat
                FROM beatmaps WHERE beatmap_id = :beatmap_id AND ranked != -1""",
             {"beatmap_id": beatmap_id},
         )
@@ -119,7 +122,8 @@ class BeatmapsRepository:
                       difficulty_ctb, difficulty_mania, max_combo,
                       hit_length, bpm, playcount, passcount, ranked,
                       latest_update as updated_at,
-                      ranked_status_freezed as ranked_status_frozen, mapper_id
+                      ranked_status_freezed as ranked_status_frozen, mapper_id,
+                      dodge_the_beat
                FROM beatmaps WHERE beatmap_md5 = :beatmap_md5 AND ranked != -1""",
             {"beatmap_md5": beatmap_md5},
         )
@@ -159,7 +163,8 @@ class BeatmapsRepository:
                        difficulty_ctb, difficulty_mania, max_combo,
                        hit_length, bpm, playcount, passcount, ranked,
                        latest_update as updated_at,
-                       ranked_status_freezed as ranked_status_frozen, mapper_id
+                       ranked_status_freezed as ranked_status_frozen, mapper_id,
+                      dodge_the_beat
                 FROM beatmaps
                 WHERE {where_clause}
                 ORDER BY playcount DESC
@@ -189,7 +194,8 @@ class BeatmapsRepository:
                        difficulty_ctb, difficulty_mania, max_combo,
                        hit_length, bpm, playcount, passcount, ranked,
                        latest_update as updated_at,
-                       ranked_status_freezed as ranked_status_frozen, mapper_id
+                       ranked_status_freezed as ranked_status_frozen, mapper_id,
+                      dodge_the_beat
                 FROM beatmaps
                 WHERE {where_clause}
                 ORDER BY playcount DESC
@@ -208,7 +214,8 @@ class BeatmapsRepository:
                       difficulty_ctb, difficulty_mania, max_combo,
                       hit_length, bpm, playcount, passcount, ranked,
                       latest_update as updated_at,
-                      ranked_status_freezed as ranked_status_frozen, mapper_id
+                      ranked_status_freezed as ranked_status_frozen, mapper_id,
+                      dodge_the_beat
                FROM beatmaps WHERE beatmapset_id = :beatmapset_id AND ranked != -1
                ORDER BY difficulty_std ASC""",
             {"beatmapset_id": beatmapset_id},

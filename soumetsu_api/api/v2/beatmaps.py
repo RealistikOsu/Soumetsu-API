@@ -39,6 +39,7 @@ class BeatmapResponse(BaseModel):
     updated_at: int
     ranked_status_frozen: bool
     mapper_id: int
+    dodge_the_beat: bool
 
 
 class ScorePlayerResponse(BaseModel):
@@ -92,6 +93,7 @@ def _to_response(b: beatmaps.BeatmapResult) -> BeatmapResponse:
         updated_at=b.updated_at,
         ranked_status_frozen=b.ranked_status_frozen,
         mapper_id=b.mapper_id,
+        dodge_the_beat=b.dodge_the_beat,
     )
 
 
@@ -335,6 +337,7 @@ async def get_beatmap_scores(
         custom_mode,
         limit,
         offset,
+        lowest_first=beatmap.dodge_the_beat,
     )
 
     return response.create(

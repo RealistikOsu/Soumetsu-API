@@ -449,3 +449,64 @@ def test_stable_detail_shows_the_patchers_own_mods_untouched():
         {"acronym": "DT", "settings": {"speed_change": 1.3, "adjust_pitch": False}},
         {"acronym": "HD", "settings": None},
     ]
+
+
+BOARD_ROW = {
+    "id": 3,
+    "beatmap_md5": "c" * 32,
+    "player_id": 9,
+    "score": 40,
+    "max_combo": 12,
+    "full_combo": 0,
+    "mods": 64,
+    "count_300": 1,
+    "count_100": 0,
+    "count_50": 0,
+    "count_katus": 0,
+    "count_gekis": 0,
+    "count_misses": 30,
+    "submitted_at": 1_700_000_000,
+    "play_mode": 2,
+    "completed": 3,
+    "accuracy": 3.2,
+    "pp": 0.0,
+    "playtime": 90_000,
+    "playback_rate": 1.3,
+    "mods_json": '[{"acronym": "DT", "settings": {"speed_change": 1.3}}]',
+    "player_db_id": 9,
+    "username": "bob",
+    "country": "PL",
+}
+
+
+class TestBeatmapBoard:
+    @pytest.mark.asyncio
+    async def test_dodge_the_beat_lists_the_lowest_score_first(self) -> None:
+        mysql = MockMySQLAdapter()
+        mysql.set_result(
+            "ORDER BY s.score ASC, s.time ASC, s.id ASC", [dict(BOARD_ROW)]
+        )
+
+        board = await scores.ScoresRepository(mysql).list_beatmap_scores(
+            "c" * 32, 2, 0, lowest_first=True
+        )
+
+        assert [s.player.username for s in board] == ["bob"]
+
+    @pytest.mark.asyncio
+    async def test_other_maps_keep_the_pp_order(self) -> None:
+        mysql = MockMySQLAdapter()
+        mysql.set_result("ORDER BY s.pp DESC", [dict(BOARD_ROW)])
+
+        board = await scores.ScoresRepository(mysql).list_beatmap_scores("c" * 32, 2, 0)
+
+        assert [s.player.username for s in board] == ["bob"]
+
+    @pytest.mark.asyncio
+    async def test_the_mod_list_survives_onto_the_board(self) -> None:
+        mysql = MockMySQLAdapter()
+        mysql.set_result("ORDER BY s.pp DESC", [dict(BOARD_ROW)])
+
+        board = await scores.ScoresRepository(mysql).list_beatmap_scores("c" * 32, 2, 0)
+
+        assert board[0].mods_json[0].acronym == "DT"

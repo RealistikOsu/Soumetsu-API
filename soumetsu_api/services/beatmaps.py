@@ -66,6 +66,7 @@ class BeatmapResult:
     updated_at: int
     ranked_status_frozen: bool
     mapper_id: int
+    dodge_the_beat: bool
 
 
 def _beatmap_to_result(b: BeatmapData) -> BeatmapResult:
@@ -90,6 +91,7 @@ def _beatmap_to_result(b: BeatmapData) -> BeatmapResult:
         updated_at=b.updated_at,
         ranked_status_frozen=b.ranked_status_frozen,
         mapper_id=b.mapper_id,
+        dodge_the_beat=b.dodge_the_beat,
     )
 
 
