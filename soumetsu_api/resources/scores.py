@@ -227,7 +227,23 @@ def stable_statistics(row: dict) -> dict[str, int]:
 _MODS = TypeAdapter(list[Mod])
 
 
+def avoided_counts(row: dict) -> dict:
+    """A dodge the beat play with the objects the player avoided as the ones they hit, which is how the game
+    shows it, so the grade and statistics agree with the accuracy that is stored for it."""
+    return {
+        **row,
+        "count_300": row["count_misses"],
+        "count_100": 0,
+        "count_50": row["count_katus"],
+        "count_katus": row["count_50"],
+        "count_misses": row["count_300"] + row["count_100"],
+    }
+
+
 def stable_detail_row_to_data(row: dict, custom_mode: int) -> LazerScoreDetailData:
+    if row.get("dodge_the_beat") and row["play_mode"] == 2:
+        row = avoided_counts(row)
+
     beatmap = None
     if row["beatmap_set_id"] is not None:
         beatmap = LazerScoreBeatmapData(
@@ -371,7 +387,7 @@ class ScoresRepository:
                        u.username, u.country, u.privileges, u.latest_activity,
                        b.beatmap_id, b.beatmapset_id AS beatmap_set_id, b.song_name,
                        b.mode AS beatmap_mode, b.ranked AS beatmap_ranked,
-                       mu.username AS creator,
+                       b.dodge_the_beat, mu.username AS creator,
                        {stars_for("s.play_mode")} AS stars
                 FROM {table} s
                 INNER JOIN users u ON u.id = s.userid

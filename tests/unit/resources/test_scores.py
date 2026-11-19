@@ -510,3 +510,47 @@ class TestBeatmapBoard:
         board = await scores.ScoresRepository(mysql).list_beatmap_scores("c" * 32, 2, 0)
 
         assert board[0].mods_json[0].acronym == "DT"
+
+
+class TestDodgeTheBeatGrade:
+    ROW = {
+        "id": 1,
+        "play_mode": 2,
+        "mods": 0,
+        "count_300": 0,
+        "count_100": 0,
+        "count_50": 0,
+        "count_katus": 5,
+        "count_gekis": 0,
+        "count_misses": 95,
+        "completed": 3,
+        "accuracy": 100.0,
+        "score": 0,
+        "max_combo": 0,
+        "pp": 0.0,
+        "playback_rate": 1.0,
+        "mods_json": None,
+        "submitted_at": 1_700_000_000,
+        "beatmap_md5": "d" * 32,
+        "player_id": 9,
+        "username": "bob",
+        "country": "PL",
+        "privileges": 1,
+        "latest_activity": 0,
+        "beatmap_set_id": None,
+    }
+
+    def test_a_perfect_dodge_is_graded_as_one_and_shows_the_avoided_objects(
+        self,
+    ) -> None:
+        detail = scores.stable_detail_row_to_data({**self.ROW, "dodge_the_beat": 1}, 0)
+
+        assert detail.rank == "X"
+        assert detail.statistics["great"] == 95
+        assert detail.statistics["miss"] == 0
+
+    def test_the_same_counts_on_another_map_keep_their_grade(self) -> None:
+        detail = scores.stable_detail_row_to_data({**self.ROW, "dodge_the_beat": 0}, 0)
+
+        assert detail.rank == "D"
+        assert detail.statistics["miss"] == 95
