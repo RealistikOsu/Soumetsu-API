@@ -339,7 +339,7 @@ class BeatmapsRepository:
                 FROM beatmaps b
                 {ranker_join}
                 LEFT JOIN users u ON u.id = b.mapper_id
-                WHERE b.beatmapset_id IN ({placeholders})""",
+                WHERE b.beatmapset_id IN ({placeholders}) AND b.ranked != -1""",
             params,
         )
         return [ProfileDifficultyData(**row) for row in rows]
@@ -492,7 +492,7 @@ class BeatmapsRepository:
                 (r.type = 'b' AND b.beatmap_id = r.bid)
                 OR (r.type = 's' AND b.beatmapset_id = r.bid)
             )
-            WHERE r.blacklisted = 0
+            WHERE r.blacklisted = 0 AND b.ranked != -1
             ORDER BY r.time DESC, r.id DESC, b.difficulty_std ASC
             LIMIT :limit OFFSET :offset""",
             {"limit": limit, "offset": offset},
