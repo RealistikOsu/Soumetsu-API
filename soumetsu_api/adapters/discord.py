@@ -98,6 +98,9 @@ async def lookup_user(discord_id: str) -> DiscordUser | None:
 
 
 async def _fetch_user(discord_id: str) -> DiscordUser | None:
+    if not settings.DISCORD_USER_LOOKUP_URL:
+        return None
+
     try:
         async with httpx.AsyncClient(timeout=3) as client:
             response = await client.get(

@@ -29,3 +29,13 @@ async def test_expired_lookup_is_served_stale_and_refreshed_in_background(
     release.set()
     await asyncio.gather(*discord._refreshing.values())
     assert await discord.lookup_user("1") == new
+
+
+@pytest.mark.asyncio
+async def test_lookup_is_skipped_without_a_service_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    discord._lookups.pop("2", None)
+    monkeypatch.setattr(discord.settings, "DISCORD_USER_LOOKUP_URL", "")
+
+    assert await discord.lookup_user("2") is None
