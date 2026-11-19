@@ -481,14 +481,14 @@ BOARD_ROW = {
 
 class TestBeatmapBoard:
     @pytest.mark.asyncio
-    async def test_dodge_the_beat_lists_the_lowest_score_first(self) -> None:
+    async def test_dodge_the_beat_lists_the_most_avoided_first(self) -> None:
         mysql = MockMySQLAdapter()
         mysql.set_result(
-            "ORDER BY s.score ASC, s.time ASC, s.id ASC", [dict(BOARD_ROW)]
+            "ORDER BY ROUND(s.accuracy, 4) DESC, s.score ASC", [dict(BOARD_ROW)]
         )
 
         board = await scores.ScoresRepository(mysql).list_beatmap_scores(
-            "c" * 32, 2, 0, lowest_first=True
+            "c" * 32, 2, 0, dodge_the_beat=True
         )
 
         assert [s.player.username for s in board] == ["bob"]

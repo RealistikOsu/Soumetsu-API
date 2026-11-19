@@ -951,7 +951,7 @@ class ScoresRepository:
         custom_mode: int,
         limit: int = 50,
         offset: int = 0,
-        lowest_first: bool = False,
+        dodge_the_beat: bool = False,
     ) -> list[ScoreWithPlayer]:
         if custom_mode in LAZER_VARIANTS:
             return await self._list_lazer_beatmap_scores(
@@ -959,8 +959,13 @@ class ScoresRepository:
             )
 
         table = self._get_table(custom_mode)
-        # A dodge the beat map is played to score as little as possible; ties go to whoever got there first.
-        order = "s.score ASC, s.time ASC, s.id ASC" if lowest_first else "s.pp DESC"
+        # A dodge the beat map stores the share of it that was avoided as the accuracy, which is rounded because
+        # the column is a single precision float. A tie goes to the lower score, then whoever got there first.
+        order = (
+            "ROUND(s.accuracy, 4) DESC, s.score ASC, s.time ASC, s.id ASC"
+            if dodge_the_beat
+            else "s.pp DESC"
+        )
 
         query = f"""
             SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score, s.max_combo,

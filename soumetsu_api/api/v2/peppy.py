@@ -352,7 +352,7 @@ async def get_scores(
         0,
         limit,
         0,
-        lowest_first=beatmap.dodge_the_beat,
+        dodge_the_beat=beatmap.dodge_the_beat,
     )
 
     results = []

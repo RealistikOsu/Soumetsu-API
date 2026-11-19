@@ -337,7 +337,7 @@ async def get_beatmap_scores(
         custom_mode,
         limit,
         offset,
-        lowest_first=beatmap.dodge_the_beat,
+        dodge_the_beat=beatmap.dodge_the_beat,
     )
 
     return response.create(
