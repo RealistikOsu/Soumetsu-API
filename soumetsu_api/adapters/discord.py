@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 
@@ -72,6 +73,7 @@ async def fetch_user(access_token: str) -> DiscordUser:
 _LOOKUP_TTL_SECONDS = 600
 _FAILED_TTL_SECONDS = 60
 _lookups: dict[str, tuple[float, DiscordUser | None]] = {}
+_refreshing: dict[str, asyncio.Task[DiscordUser | None]] = {}
 
 
 async def lookup_user(discord_id: str) -> DiscordUser | None:
@@ -79,14 +81,28 @@ async def lookup_user(discord_id: str) -> DiscordUser | None:
 
     People rename themselves on Discord all the time, so what was stored when they linked goes
     stale. Returns None when the lookup service can't be reached or doesn't know the account.
+    An expired answer is returned straight away and refreshed in the background, so a profile
+    view only waits on the lookup service the first time it sees an account.
     """
     cached = _lookups.get(discord_id)
     if cached and cached[0] > time.monotonic():
         return cached[1]
+    if cached:
+        if discord_id not in _refreshing:
+            task = asyncio.create_task(_fetch_user(discord_id))
+            _refreshing[discord_id] = task
+            task.add_done_callback(lambda _: _refreshing.pop(discord_id, None))
+        return cached[1]
 
+    return await _fetch_user(discord_id)
+
+
+async def _fetch_user(discord_id: str) -> DiscordUser | None:
     try:
         async with httpx.AsyncClient(timeout=3) as client:
-            response = await client.get(f"{settings.DISCORD_USER_LOOKUP_URL}/{discord_id}")
+            response = await client.get(
+                f"{settings.DISCORD_USER_LOOKUP_URL}/{discord_id}"
+            )
     except httpx.HTTPError:
         _lookups[discord_id] = (time.monotonic() + _FAILED_TTL_SECONDS, None)
         return None
