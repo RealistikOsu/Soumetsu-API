@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from typing import override
@@ -194,26 +195,25 @@ async def get_profile(
     if not privileges.can_view(user.id, user_privs, viewer):
         return UserError.USER_RESTRICTED
 
-    stats = await ctx.user_stats.get_stats(user_id, mode, custom_mode)
-    global_rank = await ctx.leaderboard.get_user_global_rank(user_id, mode, custom_mode)
-    country_rank = await ctx.leaderboard.get_user_country_rank(
-        user_id,
-        mode,
-        custom_mode,
-        user.country,
-    )
-    first_places = await ctx.user_stats.get_first_place_count(
-        user_id,
-        mode,
-        custom_mode,
-    )
+    async def discord_link() -> DiscordLink | None:
+        row = await ctx.discord_oauth.get_by_user(user_id)
+        return await _current_discord(row) if row and row.discord_id else None
 
-    clan_info = await ctx.users.get_clan_info(user_id)
-
-    discord_row = await ctx.discord_oauth.get_by_user(user_id)
-    discord = None
-    if discord_row and discord_row.discord_id:
-        discord = await _current_discord(discord_row)
+    (
+        stats,
+        global_rank,
+        country_rank,
+        first_places,
+        clan_info,
+        discord,
+    ) = await asyncio.gather(
+        ctx.user_stats.get_stats(user_id, mode, custom_mode),
+        ctx.leaderboard.get_user_global_rank(user_id, mode, custom_mode),
+        ctx.leaderboard.get_user_country_rank(user_id, mode, custom_mode, user.country),
+        ctx.user_stats.get_first_place_count(user_id, mode, custom_mode),
+        ctx.users.get_clan_info(user_id),
+        discord_link(),
+    )
 
     return UserProfile(
         id=user.id,

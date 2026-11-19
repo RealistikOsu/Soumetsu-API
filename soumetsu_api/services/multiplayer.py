@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from typing import override
@@ -302,15 +303,13 @@ async def _load(
     matches: list[MatchData],
 ) -> tuple[list[MatchSummary], dict[int, list[UserRef]], list[GameData]]:
     ids = [m.id for m in matches]
-    players = await ctx.multiplayer.list_players(ids)
-    games = await ctx.multiplayer.list_games(ids)
-    hosts = {
-        u.id: user_ref(u)
-        for u in await ctx.ranked_play.list_users(
-            sorted({m.host_id for m in matches if m.host_id is not None}),
-        )
-        if is_visible(u)
-    }
+    host_ids = sorted({m.host_id for m in matches if m.host_id is not None})
+    players, games, host_rows = await asyncio.gather(
+        ctx.multiplayer.list_players(ids),
+        ctx.multiplayer.list_games(ids),
+        ctx.ranked_play.list_users(host_ids),
+    )
+    hosts = {u.id: user_ref(u) for u in host_rows if is_visible(u)}
 
     roster: dict[int, list[UserRef]] = {m.id: [] for m in matches}
     for p in players:
@@ -344,16 +343,16 @@ async def get_user_matches(
     if not privileges.can_view(user.id, user_privs, viewer):
         return MultiplayerError.USER_RESTRICTED
 
-    active = (
-        await ctx.multiplayer.list_user_matches(user_id, "active") if page == 1 else []
+    async def active_matches() -> list[MatchData]:
+        if page != 1:
+            return []
+        return await ctx.multiplayer.list_user_matches(user_id, "active")
+
+    active, ended, total_ended = await asyncio.gather(
+        active_matches(),
+        ctx.multiplayer.list_user_matches(user_id, "ended", limit, (page - 1) * limit),
+        ctx.multiplayer.count_user_matches(user_id, "ended"),
     )
-    ended = await ctx.multiplayer.list_user_matches(
-        user_id,
-        "ended",
-        limit,
-        (page - 1) * limit,
-    )
-    total_ended = await ctx.multiplayer.count_user_matches(user_id, "ended")
 
     summaries, _, _ = await _load(ctx, active + ended)
     return UserMatchesResult(

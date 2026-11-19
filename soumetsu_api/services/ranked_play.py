@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 from datetime import UTC
@@ -274,8 +275,10 @@ async def _summaries(
     matches: list[MatchData],
 ) -> tuple[list[MatchSummary], list[MatchRoundData]]:
     ids = [m.id for m in matches]
-    players = await ctx.ranked_play.list_players(ids)
-    rounds = await ctx.ranked_play.list_rounds(ids)
+    players, rounds = await asyncio.gather(
+        ctx.ranked_play.list_players(ids),
+        ctx.ranked_play.list_rounds(ids),
+    )
 
     summaries = [
         build_summary(
@@ -303,16 +306,16 @@ async def get_user_matches(
     if not privileges.can_view(user.id, user_privs, viewer):
         return RankedPlayError.USER_RESTRICTED
 
-    active = (
-        await ctx.ranked_play.list_user_matches(user_id, "active") if page == 1 else []
+    async def active_matches() -> list[MatchData]:
+        if page != 1:
+            return []
+        return await ctx.ranked_play.list_user_matches(user_id, "active")
+
+    active, ended, total_ended = await asyncio.gather(
+        active_matches(),
+        ctx.ranked_play.list_user_matches(user_id, "ended", limit, (page - 1) * limit),
+        ctx.ranked_play.count_user_matches(user_id, "ended"),
     )
-    ended = await ctx.ranked_play.list_user_matches(
-        user_id,
-        "ended",
-        limit,
-        (page - 1) * limit,
-    )
-    total_ended = await ctx.ranked_play.count_user_matches(user_id, "ended")
 
     summaries, _ = await _summaries(ctx, active + ended)
     return UserMatchesResult(

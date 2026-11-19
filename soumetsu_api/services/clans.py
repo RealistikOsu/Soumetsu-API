@@ -483,12 +483,18 @@ async def get_clan_stats(
     if custom_mode not in STABLE_CUSTOM_MODES:
         return ClanError.INVALID_CUSTOM_MODE
 
-    clan = await ctx.clans.get_by_id(clan_id)
+    clan, rows = await asyncio.gather(
+        ctx.clans.get_by_id(clan_id),
+        ctx.clans.list_leaderboard_rows(mode, custom_mode),
+    )
     if not clan:
         return ClanError.CLAN_NOT_FOUND
 
-    member_stats = await ctx.clans.get_clan_member_stats(clan_id, mode, custom_mode)
+    by_clan: dict[int, list[ClanLeaderboardRow]] = {}
+    for row in rows:
+        by_clan.setdefault(row.clan_id, []).append(row)
 
+    member_stats = by_clan.get(clan_id)
     if not member_stats:
         return ClanStatsResult(
             total_pp=0,
@@ -498,28 +504,16 @@ async def get_clan_stats(
         )
 
     total_pp = _compute_weighted_pp(member_stats)
-    total_ranked_score = sum(m.ranked_score for m in member_stats)
-    total_total_score = sum(m.total_score for m in member_stats)
-
-    # Compute rank by comparing against all clans
-    all_clan_ids = await ctx.clans.get_all_clan_ids()
-    rank = 1
-    for other_clan_id in all_clan_ids:
-        if other_clan_id == clan_id:
-            continue
-        other_stats = await ctx.clans.get_clan_member_stats(
-            other_clan_id,
-            mode,
-            custom_mode,
-        )
-        other_pp = _compute_weighted_pp(other_stats)
-        if other_pp > total_pp:
-            rank += 1
+    rank = 1 + sum(
+        1
+        for other_id, others in by_clan.items()
+        if other_id != clan_id and _compute_weighted_pp(others) > total_pp
+    )
 
     return ClanStatsResult(
         total_pp=total_pp,
-        total_ranked_score=total_ranked_score,
-        total_total_score=total_total_score,
+        total_ranked_score=sum(m.ranked_score for m in member_stats),
+        total_total_score=sum(m.total_score for m in member_stats),
         rank=rank,
     )
 

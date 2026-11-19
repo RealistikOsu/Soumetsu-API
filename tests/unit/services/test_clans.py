@@ -60,3 +60,42 @@ async def test_leaderboard_pages() -> None:
 
     assert isinstance(board, list)
     assert [(e.id, e.rank) for e in board] == [(3, 3), (4, 4)]
+
+
+@pytest.mark.asyncio
+async def test_stats_rank_comes_from_one_leaderboard_query() -> None:
+    mysql = MockMySQLAdapter()
+    mysql.set_result(
+        "FROM clans WHERE id",
+        {"id": 1, "name": "alpha", "description": "", "tag": "ALP", "member_limit": 10},
+    )
+    mysql.set_result(
+        "FROM clans c",
+        [
+            member(1, "alpha", 1000, score=50),
+            member(1, "alpha", 1000, score=70),
+            member(2, "bravo", 3000),
+            member(3, "charlie", 10),
+        ],
+    )
+
+    stats = await clans.get_clan_stats(MockContext(mysql), 1, 0, 0)
+
+    assert stats.rank == 2
+    assert stats.total_pp == 1950
+    assert stats.total_ranked_score == 120
+
+
+@pytest.mark.asyncio
+async def test_stats_for_clan_without_public_members() -> None:
+    mysql = MockMySQLAdapter()
+    mysql.set_result(
+        "FROM clans WHERE id",
+        {"id": 9, "name": "ghost", "description": "", "tag": "GHO", "member_limit": 10},
+    )
+    mysql.set_result("FROM clans c", [member(1, "alpha", 1000)])
+
+    stats = await clans.get_clan_stats(MockContext(mysql), 9, 0, 0)
+
+    assert stats.rank == 0
+    assert stats.total_pp == 0
