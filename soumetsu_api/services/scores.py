@@ -12,6 +12,7 @@ from soumetsu_api.resources.scores import LazerScoreDetailData
 from soumetsu_api.resources.scores import ScoreData
 from soumetsu_api.resources.scores import ScoreTopPlay
 from soumetsu_api.resources.scores import ScoreTopPlayWithMode
+from soumetsu_api.resources.scores import ScoreWithPlayer
 from soumetsu_api.resources.scores import ScoreWithBeatmap
 from soumetsu_api.resources.sessions import SessionData
 from soumetsu_api.services._common import AbstractContext
@@ -199,6 +200,39 @@ async def get_player_best(
         offset,
     )
     return [score_with_beatmap_to_result(s) for s in scores]
+
+
+async def get_player_beatmap_scores(
+    ctx: AbstractContext,
+    beatmap_md5: str,
+    player_id: int,
+    mode: int,
+    custom_mode: int,
+    page: int = 1,
+    limit: int = 50,
+    viewer: SessionData | None = None,
+    dodge_the_beat: bool = False,
+) -> ScoreError.OnSuccess[list[ScoreWithPlayer]]:
+    user = await ctx.users.find_by_id(player_id)
+    if not user:
+        return ScoreError.USER_NOT_FOUND
+
+    user_privs = privileges.UserPrivileges(user.privileges)
+    if not privileges.can_view(user.id, user_privs, viewer):
+        return ScoreError.USER_RESTRICTED
+
+    if limit > 100:
+        limit = 100
+
+    return await ctx.scores.list_player_beatmap_scores(
+        beatmap_md5,
+        player_id,
+        mode,
+        custom_mode,
+        limit,
+        (page - 1) * limit,
+        dodge_the_beat,
+    )
 
 
 async def get_player_recent(

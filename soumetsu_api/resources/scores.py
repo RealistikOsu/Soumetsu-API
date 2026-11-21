@@ -304,6 +304,45 @@ def stable_detail_row_to_data(row: dict, custom_mode: int) -> LazerScoreDetailDa
     )
 
 
+def board_order(dodge_the_beat: bool, newest_first: bool = False) -> str:
+    # A dodge the beat map stores the share of it that was avoided as the accuracy, which is rounded because the
+    # column is a single precision float. A tie goes to the lower score, then whoever got there first.
+    if dodge_the_beat:
+        return "ROUND(s.accuracy, 4) DESC, s.score ASC, s.time ASC, s.id ASC"
+    return "s.pp DESC, s.id DESC" if newest_first else "s.pp DESC"
+
+
+def stable_board_row_to_score(row: dict) -> ScoreWithPlayer:
+    return ScoreWithPlayer(
+        id=row["id"],
+        beatmap_md5=row["beatmap_md5"],
+        player_id=row["player_id"],
+        score=row["score"],
+        max_combo=row["max_combo"],
+        full_combo=row["full_combo"],
+        mods=row["mods"],
+        count_300=row["count_300"],
+        count_100=row["count_100"],
+        count_50=row["count_50"],
+        count_katus=row["count_katus"],
+        count_gekis=row["count_gekis"],
+        count_misses=row["count_misses"],
+        submitted_at=row["submitted_at"],
+        play_mode=row["play_mode"],
+        completed=row["completed"],
+        accuracy=row["accuracy"],
+        pp=row["pp"],
+        playtime=row["playtime"],
+        playback_rate=row["playback_rate"],
+        mods_json=row["mods_json"],
+        player=ScorePlayer(
+            player_id=row["player_db_id"],
+            username=row["username"],
+            country=row["country"],
+        ),
+    )
+
+
 class ScoresRepository:
     __slots__ = ("_mysql",)
 
@@ -674,6 +713,95 @@ class ScoresRepository:
             )
         return scores
 
+    async def list_player_beatmap_scores(
+        self,
+        beatmap_md5: str,
+        player_id: int,
+        mode: int,
+        custom_mode: int,
+        limit: int = 50,
+        offset: int = 0,
+        dodge_the_beat: bool = False,
+    ) -> list[ScoreWithPlayer]:
+        """Every play a player passed on a map, in the order the board ranks them, so the best is first."""
+        if custom_mode in LAZER_VARIANTS:
+            return await self._list_lazer_player_beatmap_scores(
+                beatmap_md5,
+                player_id,
+                mode,
+                LAZER_VARIANTS[custom_mode],
+                limit,
+                offset,
+            )
+
+        table = self._get_table(custom_mode)
+        rows = await self._mysql.fetch_all(
+            f"""SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score, s.max_combo,
+                       s.full_combo, s.mods, s.300_count as count_300,
+                       s.100_count as count_100, s.50_count as count_50,
+                       s.katus_count as count_katus, s.gekis_count as count_gekis,
+                       s.misses_count as count_misses, s.time as submitted_at, s.play_mode,
+                       s.completed, s.accuracy, s.pp, s.playtime, s.playback_rate, s.mods_json,
+                       u.id as player_db_id, u.username, u.country
+                FROM {table} s
+                INNER JOIN users u ON s.userid = u.id
+                WHERE s.beatmap_md5 = :beatmap_md5 AND s.userid = :player_id
+                  AND s.play_mode = :mode AND s.completed >= 2
+                ORDER BY {board_order(dodge_the_beat, newest_first=True)}
+                LIMIT :limit OFFSET :offset""",
+            {
+                "beatmap_md5": beatmap_md5,
+                "player_id": player_id,
+                "mode": mode,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        return [stable_board_row_to_score(row) for row in rows]
+
+    async def _list_lazer_player_beatmap_scores(
+        self,
+        beatmap_md5: str,
+        player_id: int,
+        mode: int,
+        variant: int,
+        limit: int,
+        offset: int,
+    ) -> list[ScoreWithPlayer]:
+        rows = await self._mysql.fetch_all(
+            f"""SELECT {LAZER_SCORE_COLUMNS},
+                       u.id AS player_db_id, u.username, u.country
+                FROM lazer_scores l
+                INNER JOIN users u ON l.user_id = u.id
+                WHERE l.beatmap_md5 = :beatmap_md5 AND l.user_id = :player_id
+                  AND l.ruleset_id = :mode AND l.variant = :variant
+                  AND l.ranked_mods = 1 AND l.passed = 1
+                ORDER BY l.pp DESC, l.id DESC
+                LIMIT :limit OFFSET :offset""",
+            {
+                "beatmap_md5": beatmap_md5,
+                "player_id": player_id,
+                "mode": mode,
+                "variant": variant,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        scores = []
+        for row in rows:
+            data = lazer_score_row_to_data(dict(row))
+            scores.append(
+                ScoreWithPlayer(
+                    **data,
+                    player=ScorePlayer(
+                        player_id=data["player_db_id"],
+                        username=data["username"],
+                        country=data["country"],
+                    ),
+                )
+            )
+        return scores
+
     async def list_player_recent(
         self,
         player_id: int,
@@ -975,14 +1103,6 @@ class ScoresRepository:
             )
 
         table = self._get_table(custom_mode)
-        # A dodge the beat map stores the share of it that was avoided as the accuracy, which is rounded because
-        # the column is a single precision float. A tie goes to the lower score, then whoever got there first.
-        order = (
-            "ROUND(s.accuracy, 4) DESC, s.score ASC, s.time ASC, s.id ASC"
-            if dodge_the_beat
-            else "s.pp DESC"
-        )
-
         query = f"""
             SELECT s.id, s.beatmap_md5, s.userid as player_id, s.score, s.max_combo,
                    s.full_combo, s.mods, s.300_count as count_300,
@@ -997,7 +1117,7 @@ class ScoresRepository:
             AND s.play_mode = :mode
             AND s.completed = 3
             AND u.privileges & 1 > 0
-            ORDER BY {order}
+            ORDER BY {board_order(dodge_the_beat)}
             LIMIT :limit OFFSET :offset
         """
         rows = await self._mysql.fetch_all(
@@ -1009,34 +1129,4 @@ class ScoresRepository:
                 "offset": offset,
             },
         )
-        return [
-            ScoreWithPlayer(
-                id=row["id"],
-                beatmap_md5=row["beatmap_md5"],
-                player_id=row["player_id"],
-                score=row["score"],
-                max_combo=row["max_combo"],
-                full_combo=row["full_combo"],
-                mods=row["mods"],
-                count_300=row["count_300"],
-                count_100=row["count_100"],
-                count_50=row["count_50"],
-                count_katus=row["count_katus"],
-                count_gekis=row["count_gekis"],
-                count_misses=row["count_misses"],
-                submitted_at=row["submitted_at"],
-                play_mode=row["play_mode"],
-                completed=row["completed"],
-                accuracy=row["accuracy"],
-                pp=row["pp"],
-                playtime=row["playtime"],
-                playback_rate=row["playback_rate"],
-                mods_json=row["mods_json"],
-                player=ScorePlayer(
-                    player_id=row["player_db_id"],
-                    username=row["username"],
-                    country=row["country"],
-                ),
-            )
-            for row in rows
-        ]
+        return [stable_board_row_to_score(row) for row in rows]

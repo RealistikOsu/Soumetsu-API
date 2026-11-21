@@ -11,7 +11,9 @@ from soumetsu_api.api.v2.context import RequiresAuth
 from soumetsu_api.api.v2.context import RequiresContext
 from soumetsu_api.constants import CustomMode
 from soumetsu_api.constants import GameMode
+from soumetsu_api.resources.scores import ScoreWithPlayer
 from soumetsu_api.services import beatmaps
+from soumetsu_api.services import scores
 from soumetsu_api.utilities.mods import Mod
 from soumetsu_api.utilities.mods import mods_from_score
 
@@ -312,6 +314,35 @@ async def get_beatmap(
     return response.create(_to_response(result))
 
 
+def _score_response(s: ScoreWithPlayer) -> ScoreResponse:
+    return ScoreResponse(
+        id=s.id,
+        beatmap_md5=s.beatmap_md5,
+        player_id=s.player_id,
+        score=s.score,
+        max_combo=s.max_combo,
+        full_combo=s.full_combo,
+        mods=mods_from_score(s.mods, s.playback_rate, s.mods_json),
+        count_300=s.count_300,
+        count_100=s.count_100,
+        count_50=s.count_50,
+        count_katus=s.count_katus,
+        count_gekis=s.count_gekis,
+        count_misses=s.count_misses,
+        submitted_at=s.submitted_at,
+        play_mode=s.play_mode,
+        completed=s.completed,
+        accuracy=s.accuracy,
+        pp=s.pp,
+        playtime=s.playtime,
+        player=ScorePlayerResponse(
+            player_id=s.player.player_id,
+            username=s.player.username,
+            country=s.player.country,
+        ),
+    )
+
+
 @router.get(
     "/{beatmap_id}/scores",
     response_model=response.BaseResponse[list[ScoreResponse]],
@@ -340,34 +371,36 @@ async def get_beatmap_scores(
         dodge_the_beat=beatmap.dodge_the_beat,
     )
 
-    return response.create(
-        [
-            ScoreResponse(
-                id=s.id,
-                beatmap_md5=s.beatmap_md5,
-                player_id=s.player_id,
-                score=s.score,
-                max_combo=s.max_combo,
-                full_combo=s.full_combo,
-                mods=mods_from_score(s.mods, s.playback_rate, s.mods_json),
-                count_300=s.count_300,
-                count_100=s.count_100,
-                count_50=s.count_50,
-                count_katus=s.count_katus,
-                count_gekis=s.count_gekis,
-                count_misses=s.count_misses,
-                submitted_at=s.submitted_at,
-                play_mode=s.play_mode,
-                completed=s.completed,
-                accuracy=s.accuracy,
-                pp=s.pp,
-                playtime=s.playtime,
-                player=ScorePlayerResponse(
-                    player_id=s.player.player_id,
-                    username=s.player.username,
-                    country=s.player.country,
-                ),
-            )
-            for s in scores_list
-        ],
+    return response.create([_score_response(s) for s in scores_list])
+
+
+@router.get(
+    "/{beatmap_id}/scores/users/{user_id}",
+    response_model=response.BaseResponse[list[ScoreResponse]],
+)
+async def get_player_beatmap_scores(
+    ctx: OptionalAuth,
+    beatmap_id: int,
+    user_id: int,
+    mode: GameMode = Query(GameMode.STD),
+    custom_mode: CustomMode = Query(CustomMode.VANILLA),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+) -> Response:
+    """Every play a player passed on a beatmap, best first, the way the board ranks them."""
+    beatmap = response.unwrap(await beatmaps.get_beatmap(ctx, beatmap_id))
+    result = response.unwrap(
+        await scores.get_player_beatmap_scores(
+            ctx,
+            beatmap.beatmap_md5,
+            user_id,
+            mode,
+            custom_mode,
+            page=page,
+            limit=limit,
+            viewer=ctx.session,
+            dodge_the_beat=beatmap.dodge_the_beat,
+        )
     )
+
+    return response.create([_score_response(s) for s in result])
